@@ -1,8 +1,10 @@
-// Профиль команды: клуб, город, составы по сезонам (игроки + тренеры), матчи, позиция в таблице.
+// Профиль команды: клуб, город, составы по сезонам (игроки + тренеры), матчи, позиция в таблице,
+// + сигналы: серия результатов, лучший бомбардир, смена тренера.
 
 import { db } from "@/lib/db";
 import { errorResponse, HttpError } from "@/lib/http";
 import { toMatchDTO, seasonStandings } from "@/lib/queries";
+import { buildSignalsContext, computeStreak } from "@/lib/engine/signals";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -17,7 +19,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       orderBy: { startDate: "desc" },
     });
 
-    const seasonsMap = new Map<string, { season: { id: string; name: string; league: { id: string; name: string; format: string } }; players: { id: string; name: string; position: string | null; number: number | null; endDate: string | null }[]; coaches: { id: string; name: string; endDate: string | null }[] }>();
+    const seasonsMap = new Map<string, { season: { id: string; name: string; league: { id: string; name: string; format: string } }; players: { id: string; name: string; position: string | null; number: number | null; endDate: string | null }[]; coaches: { id: string; name: string; endDate: string | null; startDate: string }[] }>();
     for (const r of regs) {
       if (!seasonsMap.has(r.seasonId)) {
         seasonsMap.set(r.seasonId, {
@@ -27,7 +29,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       }
       const entry = seasonsMap.get(r.seasonId)!;
       const name = `${r.person.lastName} ${r.person.firstName}`;
-      if (r.role === "COACH") entry.coaches.push({ id: r.personId, name, endDate: r.endDate?.toISOString() ?? null });
+      if (r.role === "COACH") entry.coaches.push({ id: r.personId, name, endDate: r.endDate?.toISOString() ?? null, startDate: r.startDate.toISOString() });
       else entry.players.push({ id: r.personId, name, position: r.person.position, number: r.number, endDate: r.endDate?.toISOString() ?? null });
     }
     for (const entry of seasonsMap.values()) {
@@ -47,13 +49,31 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       orderBy: { kickoff: "desc" },
     });
 
-    // позиция в таблице текущего сезона каждой лиги
+    // позиция в таблице текущего сезона каждой лиги + сигналы сезона
     const standings = [];
+    const monthAgo = new Date(Date.now() - 30 * 86400000);
     for (const [seasonId, entry] of seasonsMap) {
       if (!entry.season) continue;
       const rows = await seasonStandings(seasonId);
       const row = rows.find((r) => r.teamId === id);
-      if (row) standings.push({ season: entry.season, position: row.position, points: row.points, games: row.games, wins: row.wins, draws: row.draws, losses: row.losses, goalsFor: row.goalsFor, goalsAgainst: row.goalsAgainst, form: row.form ?? [] });
+      if (!row) continue;
+
+      const ctx = await buildSignalsContext(seasonId);
+      const streak = computeStreak(ctx.matches, id);
+      const topScorer = ctx.topScorers.get(id) ?? null;
+      const topScorerOut = !!topScorer && ctx.suspended.has(topScorer.personId);
+      const currentCoach = entry.coaches.find((c) => !c.endDate) ?? null;
+      const coachChanged = currentCoach ? new Date(currentCoach.startDate) >= monthAgo : false;
+      const newCoachName = coachChanged ? currentCoach!.name : null;
+
+      standings.push({
+        season: entry.season,
+        position: row.position, points: row.points, games: row.games,
+        wins: row.wins, draws: row.draws, losses: row.losses,
+        goalsFor: row.goalsFor, goalsAgainst: row.goalsAgainst, form: row.form ?? [],
+        streak, topScorer: topScorerOut ? { ...topScorer!, out: true } : topScorer,
+        newCoach: newCoachName ? { name: newCoachName } : null,
+      });
     }
 
     return Response.json({

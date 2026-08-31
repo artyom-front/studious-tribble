@@ -20,7 +20,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     for (const seasonId of seasonIds) {
       const stats = (await seasonPlayerStats(seasonId)).find((s) => s.personId === id);
       const season = person.registrations.find((r) => r.seasonId === seasonId)!.season;
-      if (stats) statsBySeason.push({ season: { id: season.id, name: season.name, league: season.league.name }, stats });
+      if (stats) statsBySeason.push({
+        season: { id: season.id, name: season.name, league: season.league.name },
+        team: { id: stats.teamId, name: stats.teamName },
+        stats,
+      });
     }
 
     const events = await db.matchEvent.findMany({
@@ -31,15 +35,27 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     });
 
     // Судейская карьера (PRD §4: человек может быть игроком И судьёй)
-    let referee: { matches: number; yellowAvg: number; redAvg: number; penaltyAvg: number; avgRating: number | null; ratingsCount: number; matchList: { id: string; kickoff: string; home: string; away: string; status: string; league: string; homeScore: number | null; awayScore: number | null }[] } | null = null;
+    let referee: { matches: number; yellowAvg: number; redAvg: number; penaltyAvg: number; avgRating: number | null; ratingsCount: number; debut: string | null; byLeague: { league: string; matches: number; yellowAvg: number; redAvg: number; avgRating: number | null }[]; matchList: { id: string; kickoff: string; home: string; away: string; status: string; league: string; homeScore: number | null; awayScore: number | null }[] } | null = null;
     if (person.isReferee) {
       const refRow = (await refereeStats()).find((r) => r.personId === id) ?? null;
       const refMatches = await db.match.findMany({
         where: { refereeId: id },
-        include: { homeTeam: true, awayTeam: true, stage: { include: { season: { include: { league: true } } } } },
+        include: { homeTeam: true, awayTeam: true, events: true, ratings: true, stage: { include: { season: { include: { league: true } } } } },
         orderBy: { kickoff: "desc" },
-        take: 30,
       });
+      // разбивка по лигам: полная история, а не только последние 30
+      const byLeagueMap = new Map<string, { league: string; matches: number; yellows: number; reds: number; ratings: number[] }>();
+      for (const m of refMatches) {
+        if (m.status !== "COMPLETED") continue;
+        const key = m.stage.season.league.name;
+        if (!byLeagueMap.has(key)) byLeagueMap.set(key, { league: key, matches: 0, yellows: 0, reds: 0, ratings: [] });
+        const v = byLeagueMap.get(key)!;
+        v.matches++;
+        v.yellows += m.events.filter((e) => e.type === "YELLOW_CARD").length;
+        v.reds += m.events.filter((e) => e.type === "RED_CARD").length;
+        v.ratings.push(...m.ratings.map((r) => r.rating));
+      }
+      const debuts = refMatches.length ? refMatches[refMatches.length - 1].kickoff.toISOString() : null;
       referee = {
         matches: refRow?.matches ?? 0,
         yellowAvg: refRow?.yellowAvg ?? 0,
@@ -47,7 +63,15 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         penaltyAvg: refRow?.penaltyAvg ?? 0,
         avgRating: refRow?.avgRating ?? null,
         ratingsCount: refRow?.ratingsCount ?? 0,
-        matchList: refMatches.map((m) => ({
+        debut: debuts,
+        byLeague: [...byLeagueMap.values()].map((v) => ({
+          league: v.league,
+          matches: v.matches,
+          yellowAvg: v.matches ? +(v.yellows / v.matches).toFixed(1) : 0,
+          redAvg: v.matches ? +(v.reds / v.matches).toFixed(2) : 0,
+          avgRating: v.ratings.length ? +(v.ratings.reduce((a, b) => a + b, 0) / v.ratings.length).toFixed(1) : null,
+        })),
+        matchList: refMatches.slice(0, 30).map((m) => ({
           id: m.id, kickoff: m.kickoff.toISOString(),
           home: m.homeTeam.name, away: m.awayTeam.name, status: m.status,
           league: m.stage.season.league.name,
@@ -70,6 +94,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
           startDate: r.startDate.toISOString(),
           endDate: r.endDate?.toISOString() ?? null,
           number: r.number,
+          role: r.role,
         })),
         suspensions: person.suspensions.map((s) => ({
           league: s.season.league.name,

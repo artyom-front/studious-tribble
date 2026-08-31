@@ -60,11 +60,18 @@ export const FORMAT_COLORS: Record<string, string> = {
   FUTSAL: "#c4b5fd",
 };
 
-/** Чип формата (11×11, 8×8, 6×6, мини-футбол) с цветовой кодировкой */
+/** Чип формата (Футбол=11×11, 8×8, 6×6, мини-футбол) с цветовой кодировкой */
 export function FormatChip({ format, className }: { format: string; className?: string }) {
   const color = FORMAT_COLORS[format] ?? "#98a2b3";
+  const title =
+    format === "F11"
+      ? "Большой футбол · 11 игроков × 11 игроков"
+      : format === "FUTSAL"
+        ? "Мини-футбол (футзал) · 5×5 в зале"
+        : `Формат ${FORMAT_LABELS[format] ?? format}`;
   return (
     <span
+      title={title}
       className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold", className)}
       style={{ color, backgroundColor: `${color}1f` }}
     >

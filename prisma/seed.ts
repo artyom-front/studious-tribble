@@ -279,7 +279,7 @@ async function main() {
     m: SeedMatch,
     squads: Map<string, { id: string; position: string }[]>,
     lineupSize: number,
-    forced?: { redCard?: { side: "home" | "away"; minute: number }; yellows?: { side: "home" | "away"; personId?: string }[] }
+    forced?: { redCard?: { side: "home" | "away"; minute: number }; yellows?: { side: "home" | "away"; personId?: string }[]; score?: [number, number] }
   ) => {
     const ref = pick(referees);
     await db.match.update({ where: { id: m.id }, data: { refereeId: ref.id } });
@@ -305,7 +305,8 @@ async function main() {
       ],
     });
 
-    const homeGoals = ri(0, 4), awayGoals = ri(0, 4);
+    const homeGoals = forced?.score ? forced.score[0] : ri(0, 4);
+    const awayGoals = forced?.score ? forced.score[1] : ri(0, 4);
     const events: { minute: number; type: string; personId: string; teamId: string; assistPersonId?: string }[] = [];
     const minutes = new Set<number>();
     const uniqueMinute = () => { let x = ri(1, 90); while (minutes.has(x)) x = ri(1, 90); minutes.add(x); return x; };
@@ -371,8 +372,10 @@ async function main() {
     await completeMatch(m.id, null);
   };
 
-  // LIVE-матч сегодня (тур 4): счёт в БД, события есть, завершения нет
+  // LIVE-матч сегодня (тур 4): счёт в БД, события есть, завершения нет.
+  // Начало — 38 минут назад: лента показывает «на какой минуте» и время старта.
   const startLive = async (m: SeedMatch, squads: Map<string, { id: string; position: string }[]>, lineupSize: number) => {
+    await db.match.update({ where: { id: m.id }, data: { kickoff: new Date(Date.now() - 38 * 60000) } });
     const homeSquad = squads.get(m.home)!;
     const awaySquad = squads.get(m.away)!;
     const lineup = (squad: { id: string; position: string }[]) => [
@@ -381,9 +384,12 @@ async function main() {
     ];
     const homeLineup = lineup(homeSquad);
     const awayLineup = lineup(awaySquad);
+    // запасные хозяев — для демонстрации замены
+    const homeBench = homeSquad.filter((p) => !homeLineup.some((x) => x.id === p.id)).slice(0, 2);
     await db.lineupEntry.createMany({
       data: [
         ...homeLineup.map((p, i) => ({ matchId: m.id, teamId: m.home, personId: p.id, isStarter: true, number: i + 1 })),
+        ...homeBench.map((p, i) => ({ matchId: m.id, teamId: m.home, personId: p.id, isStarter: false, number: 12 + i })),
         ...awayLineup.map((p, i) => ({ matchId: m.id, teamId: m.away, personId: p.id, isStarter: true, number: i + 1 })),
       ],
     });
@@ -391,11 +397,27 @@ async function main() {
     await db.matchEvent.create({
       data: { matchId: m.id, minute: 23, type: "GOAL", personId: scorer.id, teamId: m.home, assistPersonId: pick(homeLineup.filter((p) => p.id !== scorer.id && p.position !== "GK")).id },
     });
-    const awayScorer = pick(awayLineup.filter((p) => p.position === "GK") ?? awayLineup);
     await db.matchEvent.create({
       data: { matchId: m.id, minute: 41, type: "GOAL", personId: pick(awayLineup.filter((p) => p.position !== "GK") ?? awayLineup).id, teamId: m.away },
     });
-    void awayScorer;
+    // VAR: проверка взятия ворот — гол подтверждён; у гостей гол отменён
+    await db.matchEvent.create({
+      data: { matchId: m.id, minute: 25, type: "VAR_GOAL_CONFIRM", personId: scorer.id, teamId: m.home },
+    });
+    await db.matchEvent.create({
+      data: { matchId: m.id, minute: 31, type: "VAR_GOAL_CANCEL", personId: pick(awayLineup.filter((p) => p.position !== "GK") ?? awayLineup).id, teamId: m.away },
+    });
+    // замена хозяев (30'): уходит полузащитник, выходит запасный
+    const outPlayer = homeLineup.filter((p) => p.position === "MF")[1] ?? homeLineup[5];
+    const inPlayer = homeBench[0];
+    if (outPlayer && inPlayer) {
+      await db.matchEvent.createMany({
+        data: [
+          { matchId: m.id, minute: 30, type: "SUB_OUT", personId: outPlayer.id, teamId: m.home },
+          { matchId: m.id, minute: 30, type: "SUB_IN", personId: inPlayer.id, teamId: m.home },
+        ],
+      });
+    }
     await db.match.update({ where: { id: m.id }, data: { status: "LIVE", homeScore: 1, awayScore: 1 } });
   };
 
@@ -409,25 +431,46 @@ async function main() {
   const r3 = matchesL1.filter((m) => m.round === 3);
   const r4 = matchesL1.filter((m) => m.round === 4);
 
+  const woMatch = r3[0];
+  const redCardMatch = r3[1];
+
+  // ---------- «Эмоции турнира»: гарантированные сигналы ----------
+  // hotTeam — 3 победы подряд (🔥), coldTeam — 3 поражения (❄) + смена тренера.
+  // Не трогаем Химик (сценарий ЖК-накопления) и команды WO-матча.
+  const woTeams = new Set([woMatch.home, woMatch.away]);
+  const signalExcluded = new Set<string>([teamsL1[6].id, ...woTeams]);
+  const hotTeam = teamsL1.find((t) => !signalExcluded.has(t.id))!;
+  const coldTeam = teamsL1.find((t) => !signalExcluded.has(t.id) && t.id !== hotTeam.id)!;
+  const forcedScoreFor = (m: SeedMatch): [number, number] | undefined => {
+    const hotHome = m.home === hotTeam.id;
+    const hotAway = m.away === hotTeam.id;
+    const coldHome = m.home === coldTeam.id;
+    const coldAway = m.away === coldTeam.id;
+    if (hotHome) return [3, 1]; // «горячая» побеждает дома
+    if (hotAway) return [1, 3]; // «горячая» побеждает в гостях
+    if (coldHome) return [0, 3]; // «холодная» проигрывает дома
+    if (coldAway) return [3, 0]; // «холодная» проигрывает в гостях
+    return undefined;
+  };
+
   for (const m of r1) {
     const side = himikSide(m);
-    const forced = side ? { yellows: [{ side, personId: himikDF.id }] } : undefined;
-    await simulate(m, squadsL1, 11, forced);
+    const yellows = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
+    await simulate(m, squadsL1, 11, { ...yellows, score: forcedScoreFor(m) });
   }
   for (const m of r2) {
     const side = himikSide(m);
-    const forced = side ? { yellows: [{ side, personId: himikDF.id }] } : undefined;
-    await simulate(m, squadsL1, 11, forced);
+    const yellows = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
+    await simulate(m, squadsL1, 11, { ...yellows, score: forcedScoreFor(m) });
   }
 
-  const woMatch = r3[0];
-  const redCardMatch = r3[1];
+  const woMatch2 = woMatch;
   for (const m of r3) {
-    if (m.id === woMatch.id) continue;
+    if (m.id === woMatch2.id) continue;
     const side = himikSide(m);
-    const forced = m.id === redCardMatch.id ? { redCard: { side: "away", minute: 74 } } : undefined;
-    const extraY = side ? { yellows: [{ side, personId: himikDF.id }] } : undefined;
-    await simulate(m, squadsL1, 11, { ...forced, ...extraY });
+    const forced = m.id === redCardMatch.id ? { redCard: { side: "away", minute: 74 } } : {};
+    const extraY = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
+    await simulate(m, squadsL1, 11, { ...forced, ...extraY, score: forcedScoreFor(m) });
   }
   await assignWalkover(woMatch.id, "HOME", null, "Неявка команды хозяев на матч (сообщение судьи)");
   await startLive(r4[0], squadsL1, 11);
@@ -463,6 +506,72 @@ async function main() {
       startDate: MSK(dayStr(-12), 0), number: 99,
     },
   });
+
+  // ---------- Сигналы ленты: бан бомбардира и смена тренера ----------
+  console.log("🔥 Сигналы турнира...");
+  // лучший бомбардир «горячей» команды дисквалифицирован решением КДК —
+  // лента покажет у её матчей значок «без бомбардира»
+  const hotGoals = await db.matchEvent.findMany({
+    where: { teamId: hotTeam.id, type: { in: ["GOAL", "PENALTY"] }, match: { status: "COMPLETED" } },
+    select: { personId: true },
+  });
+  const goalCount = new Map<string, number>();
+  for (const e of hotGoals) goalCount.set(e.personId, (goalCount.get(e.personId) ?? 0) + 1);
+  const hotScorerId = [...goalCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (hotScorerId) {
+    await db.suspension.create({
+      data: {
+        personId: hotScorerId, seasonId: season1.id, source: "MANUAL",
+        reason: "Решение КДК: грубая игра в последнем матче (2 матча)",
+        matchesTotal: 2, matchesServed: 0, isActive: true,
+      },
+    });
+  }
+  // в «холодной» команде сменился тренер (5 дней назад) — значок «новый тренер»
+  const coldCoachReg = await db.registration.findFirst({
+    where: { teamId: coldTeam.id, seasonId: season1.id, role: "COACH" },
+  });
+  if (coldCoachReg) {
+    await db.registration.update({
+      where: { id: coldCoachReg.id },
+      data: { endDate: MSK(dayStr(-6), 23), status: "ENDED" },
+    });
+  }
+  const newCoach = await db.person.create({ data: makePersonData("MF") });
+  await db.registration.create({
+    data: {
+      personId: newCoach.id, teamId: coldTeam.id, seasonId: season1.id,
+      startDate: MSK(dayStr(-5), 10), role: "COACH",
+    },
+  });
+
+  // ---------- История личных встреч: прошлогодний сезон ----------
+  // пары сегодняшнего тура уже встречались в сезоне-2025 — вкладка «Личные встречи»
+  console.log("📜 Сезон 2025 (история H2H)...");
+  const season1prev = await db.season.create({
+    data: { leagueId: league1.id, name: "Сезон 2025", startDate: MSK(dayStr(-400), 12), endDate: MSK(dayStr(-120), 12), isCurrent: false },
+  });
+  const stage1prev = await mkStage(season1prev.id);
+  const todayPairs = r4.map((m) => [m.home, m.away] as [string, string]);
+  const h2hScores: [number, number][] = [[2, 1], [0, 3], [1, 1], [2, 0], [1, 2], [3, 1], [0, 0], [2, 2]];
+  let h2hIdx = 0;
+  for (const [home, away] of todayPairs) {
+    for (const swap of [false, true]) {
+      const [h, a] = swap ? [away, home] : [home, away];
+      const [hs, as] = h2hScores[h2hIdx % h2hScores.length];
+      await db.match.create({
+        data: {
+          stageId: stage1prev.id, round: swap ? 2 : 1,
+          homeTeamId: h, awayTeamId: a,
+          stadiumId: stadiums[h2hIdx % stadiums.length].id,
+          kickoff: MSK(dayStr(-400 + h2hIdx * 35), 15),
+          status: "COMPLETED", homeScore: hs, awayScore: as,
+          refereeId: referees[h2hIdx % referees.length].id,
+        },
+      });
+      h2hIdx++;
+    }
+  }
 
   // ---------- Оценки судей (Milestone 5) ----------
   console.log("⭐ Оценки судей...");

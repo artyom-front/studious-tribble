@@ -9,12 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowLeft, Ban, Goal, TriangleAlert, OctagonX, Repeat, Flag, CheckCircle2, RotateCcw, Trash2, Users, Info } from "lucide-react";
+import { ArrowLeft, Ban, Flag, CheckCircle2, RotateCcw, Trash2, Users, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiPost, fmtDate, useFetch } from "./hooks";
 import type { SessionUserDTO } from "./types";
 import { EVENT_LABELS } from "./types";
 import { ScoreBox, StatusBadge } from "./ui-bits";
+import { EventIcon, BallIcon, CardIcon } from "./EventIcons";
 
 interface EligiblePlayer {
   personId: string;
@@ -53,6 +54,11 @@ const EVENT_TYPES = [
   { value: "OWN_GOAL", label: "Автогол" },
   { value: "YELLOW_CARD", label: "Жёлтая карточка" },
   { value: "RED_CARD", label: "Красная карточка" },
+  { value: "SUB_OUT", label: "Замена: ушёл с поля" },
+  { value: "SUB_IN", label: "Замена: вышел на поле" },
+  { value: "VAR_GOAL_CONFIRM", label: "VAR: гол подтверждён" },
+  { value: "VAR_GOAL_CANCEL", label: "VAR: гол отменён" },
+  { value: "VAR_PENALTY", label: "VAR: назначен пенальти" },
 ];
 
 export default function ProtocolEditor({ matchId, user, onBack, bump }: Props) {
@@ -372,7 +378,7 @@ export default function ProtocolEditor({ matchId, user, onBack, bump }: Props) {
           {!isLocked && (
             <Card className="border-zinc-200">
               <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base"><Goal className="h-4 w-4 text-emerald-600" /> Добавить событие</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><BallIcon className="h-4 w-4 text-emerald-600" /> Добавить событие</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -456,11 +462,7 @@ export default function ProtocolEditor({ matchId, user, onBack, bump }: Props) {
               {data.events.map((e) => (
                 <div key={e.id} className={`flex items-center gap-3 border-b border-zinc-100 px-4 py-2 text-sm ${e.teamId === m.homeTeam.id ? "" : "flex-row-reverse text-right"}`}>
                   <span className="w-9 shrink-0 font-mono text-xs text-zinc-400">{e.minute}&apos;</span>
-                  {e.type === "GOAL" || e.type === "PENALTY" ? <Goal className="h-4 w-4 shrink-0 text-emerald-600" /> :
-                   e.type === "OWN_GOAL" ? <Goal className="h-4 w-4 shrink-0 text-red-500" /> :
-                   e.type === "YELLOW_CARD" ? <TriangleAlert className="h-4 w-4 shrink-0 text-yellow-500" /> :
-                   e.type === "RED_CARD" ? <OctagonX className="h-4 w-4 shrink-0 text-red-600" /> :
-                   <Repeat className="h-4 w-4 shrink-0 text-zinc-400" />}
+                  <span className="flex shrink-0 items-center justify-center"><EventIcon type={e.type} /></span>
                   <span className="flex-1 truncate">
                     <span className="font-medium">{e.person.name}</span>
                     <span className="ml-2 text-xs text-zinc-400">{EVENT_LABELS[e.type]}</span>
@@ -512,7 +514,7 @@ export default function ProtocolEditor({ matchId, user, onBack, bump }: Props) {
 
           <Card className="border-amber-200">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base text-amber-700"><TriangleAlert className="h-4 w-4" /> Техническое поражение (WO)</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base text-amber-700"><CardIcon kind="yellow" className="h-4 w-4" /> Техническое поражение (WO)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {!isLocked ? (

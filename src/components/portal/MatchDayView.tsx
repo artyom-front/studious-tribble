@@ -1,16 +1,17 @@
 "use client";
 
 // Главная — livescore-лента «Ночь под прожекторами»:
-// фильтры даты/статуса, матчи по лигам, избранное-звёзды, LIVE-акценты.
+// фильтры даты/статуса, матчи по лигам, избранное-звёзды, LIVE-минуты,
+// «эмоции турнира» (серии, важные матчи, пропуски бомбардиров) + легенда.
 
-import { useMemo, useState } from "react";
-import { CalendarDays, ChevronRight, MapPin, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, ChevronDown, ChevronRight, Flame, Info, MapPin, Snowflake, Star, Trophy, UserCog, UserX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFetch } from "./hooks";
 import { navigate, mskDay } from "./router";
-import type { MatchDayDTO, MatchDTO, OverviewDTO } from "./types";
+import type { MatchDayDTO, OverviewDTO, LivescoreMatchDTO, MatchSignalSideDTO } from "./types";
 import { FormatChip } from "./visuals";
-import { LoadingBlock, matchScore, EmptyState } from "./ui-bits";
+import { LoadingBlock, matchScore, EmptyState, StreakMark } from "./ui-bits";
 
 interface Props {
   format: string;
@@ -41,16 +42,28 @@ export default function MatchDayView({ format, version, favs, onToggleFav }: Pro
   const [dayTab, setDayTab] = useState<DayTab>("today");
   const [customDate, setCustomDate] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [liveTick, setLiveTick] = useState(0); // авто-обновление при LIVE
 
   const dateParam = customDate ?? (dayTab === "all" ? "all" : dayTab === "today" ? mskDay(0) : dayTab === "yesterday" ? mskDay(-1) : mskDay(1));
   const { data, loading, error } = useFetch<{ leagues: MatchDayDTO[] }>(
     `/api/public/matches/day?date=${dateParam}&format=${format}`,
-    version
+    version + liveTick
   );
+
+  const anyLive = useMemo(
+    () => (data?.leagues ?? []).some((l) => l.matches.some((m) => m.status === "LIVE")),
+    [data]
+  );
+  // LIVE-матчи: каждые 30 секунд подтягиваем счёт, события и текущую минуту
+  useEffect(() => {
+    if (!anyLive) return;
+    const t = setInterval(() => setLiveTick((x) => x + 1), 30000);
+    return () => clearInterval(t);
+  }, [anyLive]);
 
   const leagues = useMemo(() => {
     const src = data?.leagues ?? [];
-    const filterFn = (m: MatchDTO) => {
+    const filterFn = (m: LivescoreMatchDTO) => {
       if (status === "live") return m.status === "LIVE";
       if (status === "finished") return m.status === "COMPLETED" || m.status === "WALKOVER";
       if (status === "upcoming") return m.status === "SCHEDULED" || m.status === "POSTPONED";
@@ -152,41 +165,53 @@ export default function MatchDayView({ format, version, favs, onToggleFav }: Pro
           {l.matches.map((m) => <MatchRow key={m.id} m={m} />)}
         </section>
       ))}
+
+      <SignalsLegend />
     </div>
   );
 }
 
-/** Строка матча в стиле livescore (тёмная) */
-function MatchRow({ m }: { m: MatchDTO }) {
+/** Строка матча в стиле livescore: LIVE-минута и время начала,
+ *  серии команд, значки «важно / без бомбардира / новый тренер». */
+function MatchRow({ m }: { m: LivescoreMatchDTO }) {
   const score = matchScore(m);
   const time = new Date(m.kickoff);
   const timeStr = time.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
   const dateStr = time.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", timeZone: "Europe/Moscow" });
 
-  const left = m.status === "SCHEDULED" || m.status === "POSTPONED" ? timeStr : m.status === "LIVE" ? "LIVE" : dateStr;
+  const s = m.signals;
+  const important = s?.important;
+  const elapsed = Math.floor((Date.now() - time.getTime()) / 60000);
+  const liveMinute = elapsed >= 95 ? "90+" : `${Math.max(0, Math.min(90, elapsed))}'`;
 
   return (
     <button
       onClick={() => navigate(`/match/${m.id}`)}
+      title={important?.flag ? important.reason : undefined}
       className={cn(
-        "grid w-full grid-cols-[64px_minmax(0,1fr)_auto_minmax(0,1fr)_24px] items-center gap-2 border-b border-sline/40 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-s2/60",
-        m.status === "LIVE" && "bg-live/[0.06]"
+        "grid w-full grid-cols-[72px_minmax(0,1fr)_auto_minmax(0,1fr)_26px] items-center gap-2 border-b border-sline/40 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-s2/60",
+        m.status === "LIVE" && "bg-live/[0.06]",
+        important?.flag && "match-important"
       )}
     >
       {/* время / статус */}
       {m.status === "LIVE" ? (
-        <span className="flex items-center gap-1.5 font-mono text-xs font-bold text-live">
-          <span className="h-1.5 w-1.5 rounded-full bg-live live-dot" />
-          {left}
+        <span className="flex flex-col items-start leading-tight">
+          <span className="flex items-center gap-1.5 font-mono text-xs font-bold text-live">
+            <span className="h-1.5 w-1.5 rounded-full bg-live live-dot" />
+            {liveMinute}
+          </span>
+          <span className="text-[10px] text-ink3">с {timeStr}</span>
         </span>
+      ) : m.status === "SCHEDULED" || m.status === "POSTPONED" ? (
+        <span className="font-mono text-xs font-semibold tabular text-ink2">{timeStr}</span>
       ) : (
-        <span className={cn("font-mono text-xs tabular", m.status === "COMPLETED" || m.status === "WALKOVER" ? "text-ink3" : "font-semibold text-ink2")}>
-          {left}
-        </span>
+        <span className="font-mono text-xs tabular text-ink3">{dateStr}</span>
       )}
 
-      {/* хозяева */}
-      <span className="flex min-w-0 items-center justify-end gap-2 text-sm">
+      {/* хозяева + сигналы */}
+      <span className="flex min-w-0 items-center justify-end gap-1.5 text-sm">
+        <TeamSignals side={s?.home} />
         <span className={cn("truncate", score && score.home > score.away ? "font-bold text-ink" : "font-medium text-ink2")}>
           {m.homeTeam.name}
         </span>
@@ -203,17 +228,75 @@ function MatchRow({ m }: { m: MatchDTO }) {
         )}
       </span>
 
-      {/* гости */}
-      <span className="flex min-w-0 items-center gap-2 text-sm">
+      {/* гости + сигналы */}
+      <span className="flex min-w-0 items-center gap-1.5 text-sm">
         <span className={cn("truncate", score && score.away > score.home ? "font-bold text-ink" : "font-medium text-ink2")}>
           {m.awayTeam.name}
         </span>
+        <TeamSignals side={s?.away} />
       </span>
 
-      {/* стадион */}
-      <span className="hidden justify-self-end text-ink3 md:block" title={m.stadium ? `${m.stadium.name}${m.stadium.city ? `, ${m.stadium.city}` : ""}` : undefined}>
-        <MapPin className="h-3.5 w-3.5" />
+      {/* важность / стадион */}
+      <span className="flex justify-self-end">
+        {important?.flag ? (
+          <Trophy className="h-4 w-4 text-gold" aria-label="Важный матч" />
+        ) : (
+          <span className="hidden text-ink3 md:block" title={m.stadium ? `${m.stadium.name}${m.stadium.city ? `, ${m.stadium.city}` : ""}` : undefined}>
+            <MapPin className="h-3.5 w-3.5" />
+          </span>
+        )}
       </span>
     </button>
+  );
+}
+
+/** Компактные значки-сигналы рядом с именем команды */
+function TeamSignals({ side }: { side?: MatchSignalSideDTO }) {
+  if (!side) return null;
+  return (
+    <span className="flex shrink-0 items-center gap-0.5">
+      <StreakMark streak={side.streak} compact />
+      {side.topScorerOut && (
+        <span title={`Не сыграет лучший бомбардир: ${side.topScorer?.name} (${side.topScorer?.goals} голов) — дисквалификация`} className="text-live">
+          <UserX className="h-3.5 w-3.5" />
+        </span>
+      )}
+      {side.newCoach && (
+        <span title={`Новый тренер: ${side.newCoach.name}`} className="text-amber-300">
+          <UserCog className="h-3.5 w-3.5" />
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Легенда условных обозначений — сворачиваемая, чтобы не занимать экран */
+function SignalsLegend() {
+  const items: { icon: React.ReactNode; text: string }[] = [
+    { icon: <Flame className="h-3.5 w-3.5 streak-hot streak-hot-glow" />, text: "команда «на огне» — 3+ победы подряд" },
+    { icon: <Snowflake className="h-3.5 w-3.5 streak-cold" />, text: "кризис — 3+ поражений подряд" },
+    { icon: <Trophy className="h-3.5 w-3.5 text-gold" />, text: "важный матч: борьба за 1-е место или призы, финиш турнира" },
+    { icon: <UserX className="h-3.5 w-3.5 text-live" />, text: "у команды не сыграет лучший бомбардир (дисквалификация)" },
+    { icon: <UserCog className="h-3.5 w-3.5 text-amber-300" />, text: "у команды новый тренер (последние 30 дней)" },
+    { icon: <span className="h-1.5 w-1.5 rounded-full bg-live" />, text: "LIVE — счёт обновляется автоматически; рядом идущая минута и время начала" },
+    { icon: <span className="text-[9px] font-bold text-warn">Т</span>, text: "форма: В/Н/П — результат, Т — техпоражение, тВ — техпобеда" },
+    { icon: <span className="font-mono text-[10px] text-ink3">— : —</span>, text: "матч ещё не сыгран (дата и время слева)" },
+  ];
+  return (
+    <details className="group rounded-xl border border-sline bg-s1">
+      <summary className="flex cursor-pointer select-none items-center gap-2 px-4 py-2.5 text-xs font-semibold text-ink2 transition-colors hover:text-ink">
+        <Info className="h-3.5 w-3.5 text-gold" />
+        Условные обозначения — что смотреть в первую очередь
+        <ChevronDown className="ml-auto h-4 w-4 text-ink3 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="grid gap-x-6 gap-y-2 border-t border-sline/60 px-4 py-3 text-xs text-ink3 sm:grid-cols-2">
+        {items.map((it, i) => (
+          <span key={i} className="flex items-center gap-2.5">
+            <span className="flex w-5 shrink-0 justify-center">{it.icon}</span>
+            {it.text}
+          </span>
+        ))}
+      </div>
+    </details>
   );
 }

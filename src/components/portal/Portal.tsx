@@ -30,7 +30,7 @@ import AdminShell from "./AdminShell";
 
 const FORMATS: { id: string; label: string }[] = [
   { id: "all", label: "Все виды" },
-  { id: "F11", label: "11×11" },
+  { id: "F11", label: "Футбол" },
   { id: "F8", label: "8×8" },
   { id: "F6", label: "6×6" },
   { id: "FUTSAL", label: "Мини-футбол" },

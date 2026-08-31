@@ -1,7 +1,7 @@
 // Общие словари отображения — используются и API (сервер), и UI (клиент).
 
 export const FORMAT_LABELS: Record<string, string> = {
-  F11: "11×11",
+  F11: "Футбол", // большой футбол 11×11 — для зрителя это просто «футбол»
   F8: "8×8",
   F6: "6×6",
   FUTSAL: "Мини-футбол",
@@ -22,8 +22,12 @@ export const EVENT_LABELS: Record<string, string> = {
   OWN_GOAL: "Автогол",
   YELLOW_CARD: "Жёлтая карточка",
   RED_CARD: "Красная карточка",
-  SUB_OUT: "Замена (ушёл)",
-  SUB_IN: "Замена (вышел)",
+  SUB_OUT: "Замена (ушёл с поля)",
+  SUB_IN: "Замена (вышел на поле)",
+  // VAR: видеопомощь — событие о решении, а не о голе
+  VAR_GOAL_CONFIRM: "VAR: гол подтверждён",
+  VAR_GOAL_CANCEL: "VAR: гол отменён",
+  VAR_PENALTY: "VAR: назначен пенальти",
 };
 
 export const SOURCE_LABELS: Record<string, string> = {
@@ -38,4 +42,21 @@ export const STATUS_LABELS: Record<string, string> = {
   COMPLETED: "Завершён",
   WALKOVER: "Тех. поражение",
   POSTPONED: "Перенесён",
+};
+
+/** Серии команд для сигналов ленты (код → читаемый текст) */
+export const STREAK_LABELS: Record<string, string> = {
+  W: "побед",
+  D: "ничьих",
+  L: "поражений",
+  T: "техпоражений",
+  w: "техпобед",
+};
+
+/** Позиции игроков — полные названия */
+export const POSITION_LABELS: Record<string, string> = {
+  GK: "Вратарь",
+  DF: "Защитник",
+  MF: "Полузащитник",
+  FW: "Нападающий",
 };

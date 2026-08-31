@@ -4,14 +4,15 @@
 // состав по позициям с аватарами, календарь матчей с формой.
 
 import { useState } from "react";
-import { Building2, MapPin, UserCog } from "lucide-react";
+import { Building2, MapPin, UserCog, UserX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFetch } from "./hooks";
 import { navigate } from "./router";
 import type { MatchDTO } from "./types";
 import { FORMAT_LABELS } from "@/lib/labels";
-import { LoadingBlock, EmptyState, FormBadges, matchScore } from "./ui-bits";
+import { LoadingBlock, EmptyState, FormBadges, matchScore, StreakMark } from "./ui-bits";
 import { Avatar, Breadcrumbs, Crest, StatTile } from "./visuals";
+import { BallIcon } from "./EventIcons";
 
 interface TeamDetail {
   team: {
@@ -21,9 +22,16 @@ interface TeamDetail {
   seasons: {
     season: { id: string; name: string; league: { id: string; name: string; format: string } };
     players: { id: string; name: string; position: string | null; number: number | null; endDate: string | null }[];
-    coaches: { id: string; name: string; endDate: string | null }[];
+    coaches: { id: string; name: string; endDate: string | null; startDate: string }[];
   }[];
-  standings: { season: { id: string; name: string; league: { id: string; name: string; format: string } }; position: number; points: number; games: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; form?: string[] }[];
+  standings: {
+    season: { id: string; name: string; league: { id: string; name: string; format: string } };
+    position: number; points: number; games: number; wins: number; draws: number; losses: number;
+    goalsFor: number; goalsAgainst: number; form?: string[];
+    streak?: { code: string; count: number } | null;
+    topScorer?: { personId: string; name: string; goals: number; out?: boolean } | null;
+    newCoach?: { name: string } | null;
+  }[];
   matches: (MatchDTO & { league: { id: string; name: string; format: string } })[];
 }
 
@@ -71,10 +79,13 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
         <div className="stadium-glow flex flex-wrap items-center gap-4 px-4 py-5 sm:px-6">
           <Crest name={team.name} id={team.id} size="xl" className="ring-1 ring-white/10" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-black tracking-tight text-ink">{team.name}</h1>
+            <h1 className="flex flex-wrap items-center gap-2 text-2xl font-black tracking-tight text-ink">
+              {team.name}
+              <StreakMark streak={top?.streak} />
+            </h1>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink3">
               {team.club && (
-                <button className="flex items-center gap-1 hover:text-gold"><Building2 className="h-3 w-3" />{team.club.name}</button>
+                <button className="flex items-center gap-1 hover:text-gold" onClick={() => navigate("/")} title="Клуб"><Building2 className="h-3 w-3" />{team.club.name}</button>
               )}
               {(team.city ?? team.club?.city) && (
                 <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{team.city ?? team.club?.city}</span>
@@ -85,6 +96,17 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
                 </button>
               )}
             </p>
+            {top?.topScorer && (
+              <button
+                className={cn("mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold hover:text-gold", top.topScorer.out ? "text-live" : "text-ink2")}
+                onClick={() => navigate(`/player/${top.topScorer!.personId}`)}
+                title={top.topScorer.out ? "Лучший бомбардир дисквалифицирован — не сыграет" : "Лучший бомбардир команды в сезоне"}
+              >
+                <BallIcon className="h-3 w-3" />
+                бомбардир: {top.topScorer.name} · {top.topScorer.goals}
+                {top.topScorer.out && <UserX className="h-3 w-3" />}
+              </button>
+            )}
           </div>
           {top && (
             <div className="flex shrink-0 items-center gap-3 rounded-xl border border-gold/30 bg-gold/5 px-4 py-2.5">
@@ -119,21 +141,34 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
               <span className="text-xs text-ink3">{current.players.filter((p) => !p.endDate).length} в заявке</span>
             </div>
             <div className="p-3">
-              {current.coaches.length > 0 && (
+              {/* Тренерский штаб: действующие тренеры; «новый» — если пришёл недавно */}
+              {current.coaches.filter((c) => !c.endDate).length > 0 && (
                 <div className="mb-3 flex flex-wrap items-center gap-2.5 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5">
                   <UserCog className="h-4 w-4 text-amber-400" />
-                  {current.coaches.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => navigate(`/player/${c.id}`)}
-                      className="flex items-center gap-2 text-sm font-semibold text-ink hover:text-gold"
-                    >
-                      <Avatar name={c.name} id={c.id} size="xs" />
-                      {c.name}
-                    </button>
-                  ))}
+                  {current.coaches.filter((c) => !c.endDate).map((c) => {
+                    const isNew = new Date(c.startDate).getTime() >= Date.now() - 30 * 86400000;
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => navigate(`/player/${c.id}`)}
+                        className="flex items-center gap-2 text-sm font-semibold text-ink hover:text-gold"
+                        title={isNew ? "Возглавил команду недавно (до 30 дней)" : "Действующий тренер"}
+                      >
+                        <Avatar name={c.name} id={c.id} size="xs" />
+                        {c.name}
+                        {isNew && (
+                          <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">новый тренер</span>
+                        )}
+                      </button>
+                    );
+                  })}
                   <span className="text-xs text-ink3">тренерский штаб</span>
                 </div>
+              )}
+              {current.coaches.some((c) => c.endDate) && (
+                <p className="mb-3 px-1 text-[10px] text-ink3">
+                  Ранее командой руководили: {current.coaches.filter((c) => c.endDate).map((c) => c.name).join(", ")}
+                </p>
               )}
               <div className="space-y-1">
                 {POS_GROUPS.map((pos) => {
@@ -240,11 +275,11 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
         </div>
       </div>
 
-      {/* ---------- Турнирные положения ---------- */}
-      {standings.length > 1 && (
+      {/* ---------- Выступления по сезонам ---------- */}
+      {standings.length > 0 && (
         <div className="overflow-hidden rounded-xl border border-sline bg-s1">
           <div className="border-b border-sline/60 bg-s2/50 px-4 py-3">
-            <p className="text-sm font-bold text-ink">Турнирное положение</p>
+            <p className="text-sm font-bold text-ink">Выступления по сезонам</p>
           </div>
           <div className="space-y-2 p-3">
             {standings.map((s) => (

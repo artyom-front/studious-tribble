@@ -86,7 +86,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90].includes(Number(minute)) && !(Number(minute) >= 1 && Number(minute) <= 120)) {
           throw new HttpError(422, "Минута должна быть от 1 до 120");
         }
-        const validTypes = ["GOAL", "PENALTY", "OWN_GOAL", "YELLOW_CARD", "RED_CARD", "SUB_OUT", "SUB_IN"];
+        const validTypes = [
+          "GOAL", "PENALTY", "OWN_GOAL", "YELLOW_CARD", "RED_CARD",
+          "SUB_OUT", "SUB_IN",
+          "VAR_GOAL_CONFIRM", "VAR_GOAL_CANCEL", "VAR_PENALTY",
+        ];
         if (!validTypes.includes(type)) throw new HttpError(422, "Неизвестный тип события");
         if (!personId || !teamId) throw new HttpError(422, "Укажите игрока и команду");
 

@@ -1,8 +1,11 @@
 // Livescore-лента: матчи по дате (МСК) и формату, сгруппированные по лигам (текущие сезоны).
+// Каждый матч обогащается сигналами турнира: серии команд, важность,
+// «без бомбардира», «новый тренер» — чтобы зритель сразу видел, на что смотреть.
 
 import { db } from "@/lib/db";
 import { errorResponse } from "@/lib/http";
-import { toMatchDTO } from "@/lib/queries";
+import { toMatchDTO, seasonStandings } from "@/lib/queries";
+import { buildSignalsContext, matchSignals } from "@/lib/engine/signals";
 
 const FORMATS = ["F11", "F8", "F6", "FUTSAL"];
 
@@ -46,13 +49,25 @@ export async function GET(req: Request) {
         orderBy: { kickoff: "asc" },
       });
       if (matches.length === 0) continue;
+
+      // сигналы турнира: считаются по всему сезону (стрики — полная история)
+      const standings = await seasonStandings(season.id);
+      const ctx = await buildSignalsContext(season.id);
+
       result.push({
         league: {
           id: league.id, name: league.name, shortName: league.shortName, format: league.format,
           isPinned: league.isPinned, walkoverScore: league.walkoverScore,
         },
         season: { id: season.id, name: season.name },
-        matches: matches.map((m) => toMatchDTO(m, league.walkoverScore)),
+        matches: matches.map((m) => ({
+          ...toMatchDTO(m, league.walkoverScore),
+          signals: matchSignals(
+            { id: m.id, round: m.round, homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId },
+            ctx,
+            standings
+          ),
+        })),
       });
     }
 

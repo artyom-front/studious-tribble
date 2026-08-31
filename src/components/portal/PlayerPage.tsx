@@ -1,16 +1,18 @@
 "use client";
 
-// Профиль персоны «Ночь под прожекторами»: геро с аватаром, суммарная статистика,
-// вкладки Карьера (заявки/трансферы) · Статистика · Дисциплина, судейская карьера.
+// Профиль персоны «Ночь под прожекторами»: возраст, позиция, текущая команда
+// и номер, роли (игрок/тренер/судья), статистика по лигам·сезонам·командам,
+// карьерные заявки/трансферы, дисциплина с прогрессом отбытия.
 
 import { useState } from "react";
-import { Goal, TriangleAlert, OctagonX, Repeat, Ban, ArrowRightLeft, Flag, Star, Shield, UserCog } from "lucide-react";
+import { Flag, Star, Shield, UserCog, Ban, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { useFetch, fmtDate, fmtShortDate } from "./hooks";
 import { navigate } from "./router";
-import { EVENT_LABELS, SOURCE_LABELS } from "@/lib/labels";
+import { EVENT_LABELS, SOURCE_LABELS, POSITION_LABELS } from "@/lib/labels";
 import { LoadingBlock, PositionBadge, EmptyState } from "./ui-bits";
+import { EventIcon } from "./EventIcons";
 import { Avatar, Breadcrumbs, Crest, StatTile } from "./visuals";
 
 interface PlayerDetail {
@@ -22,7 +24,8 @@ interface PlayerDetail {
     isReferee: boolean;
     referee: {
       matches: number; yellowAvg: number; redAvg: number; penaltyAvg: number;
-      avgRating: number | null; ratingsCount: number;
+      avgRating: number | null; ratingsCount: number; debut: string | null;
+      byLeague: { league: string; matches: number; yellowAvg: number; redAvg: number; avgRating: number | null }[];
       matchList: { id: string; kickoff: string; home: string; away: string; status: string; league: string; homeScore: number | null; awayScore: number | null }[];
     } | null;
     registrations: {
@@ -31,6 +34,7 @@ interface PlayerDetail {
       startDate: string;
       endDate: string | null;
       number: number | null;
+      role: string;
     }[];
     suspensions: {
       league: string; source: string; reason: string | null;
@@ -38,6 +42,7 @@ interface PlayerDetail {
     }[];
     statsBySeason: {
       season: { id: string; name: string; league: string };
+      team: { id: string; name: string };
       stats: {
         games: number; goals: number; penalties: number; ownGoals: number; assists: number;
         yellowCards: number; redCards: number; cleanSheets: number;
@@ -47,7 +52,20 @@ interface PlayerDetail {
   };
 }
 
-const POSITION_TITLES: Record<string, string> = { GK: "Вратарь", DF: "Защитник", MF: "Полузащитник", FW: "Нападающий" };
+function ageOf(iso: string): number {
+  const b = new Date(iso);
+  const now = new Date();
+  let a = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) a--;
+  return a;
+}
+function ageWord(n: number): string {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return "год";
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "года";
+  return "лет";
+}
 
 type Tab = "career" | "stats" | "discipline";
 
@@ -72,9 +90,15 @@ export default function PlayerPage({ personId }: { personId: string }) {
     { games: 0, goals: 0, assists: 0, yellow: 0, red: 0 }
   );
 
-  const currentReg = p.registrations.find((r) => !r.endDate);
+  const currentReg = p.registrations.find((r) => !r.endDate && r.role === "PLAYER") ?? p.registrations.find((r) => !r.endDate);
   const activeSusp = p.suspensions.filter((s) => s.isActive);
-  const isCoach = p.registrations.length > 0 && p.statsBySeason.length === 0 && !p.isReferee;
+  const roles: string[] = [];
+  if (p.isReferee) roles.push("судья");
+  if (p.registrations.some((r) => r.role === "COACH")) roles.push("тренер");
+  if (p.registrations.some((r) => r.role === "PLAYER")) roles.push("игрок");
+  const isCoachOnly = roles.length === 1 && roles[0] === "тренер";
+  const age = p.birthDate ? ageOf(p.birthDate) : null;
+  const currentNumber = currentReg?.role === "PLAYER" ? currentReg.number : null;
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "career", label: "Карьера" },
@@ -82,12 +106,14 @@ export default function PlayerPage({ personId }: { personId: string }) {
     { id: "discipline", label: `Дисциплина${p.suspensions.length ? ` · ${p.suspensions.length}` : ""}` },
   ];
 
+  const crumb = roles.length === 1 && roles[0] === "судья" ? "Судьи" : isCoachOnly ? "Тренеры" : "Игроки";
+
   return (
     <div className="space-y-3">
       <Breadcrumbs
         items={[
           { label: "Главная", onClick: () => navigate("/") },
-          { label: p.isReferee && career.games === 0 ? "Судьи" : "Персоны", onClick: () => navigate("/") },
+          { label: crumb, onClick: () => navigate("/") },
           { label: p.name },
         ]}
         className="px-1"
@@ -101,30 +127,45 @@ export default function PlayerPage({ personId }: { personId: string }) {
             <h1 className="flex flex-wrap items-center gap-2 text-2xl font-black tracking-tight text-ink">
               {p.name}
               <PositionBadge position={p.position} />
-              {p.isReferee && (
-                <Badge variant="outline" className="border-gold/40 bg-gold/10 text-gold">
-                  <Flag className="mr-1 h-3 w-3" />судья
-                </Badge>
-              )}
-              {isCoach && (
-                <Badge variant="outline" className="border-amber-400/40 bg-amber-400/10 text-amber-300">
-                  <UserCog className="mr-1 h-3 w-3" />тренер
-                </Badge>
-              )}
             </h1>
-            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink3">
-              {p.position && <span>{POSITION_TITLES[p.position] ?? p.position}</span>}
-              {p.birthDate && <span>род. {new Date(p.birthDate).toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" })}</span>}
+            {/* Роли человека: игрок / тренер / судья — инвариант «один человек — много ролей» */}
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {roles.map((r) => (
+                <Badge
+                  key={r}
+                  variant="outline"
+                  className={cn(
+                    r === "судья" && "border-gold/40 bg-gold/10 text-gold",
+                    r === "тренер" && "border-amber-400/40 bg-amber-400/10 text-amber-300",
+                    r === "игрок" && "border-ok/40 bg-ok/10 text-ok"
+                  )}
+                >
+                  {r === "судья" && <Flag className="mr-1 h-3 w-3" />}
+                  {r === "тренер" && <UserCog className="mr-1 h-3 w-3" />}
+                  {r}
+                </Badge>
+              ))}
+            </div>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink3">
+              {p.position && <span className="text-ink2">{POSITION_LABELS[p.position] ?? p.position}</span>}
+              {age !== null && (
+                <span className="text-ink2" title={p.birthDate ? `Дата рождения: ${new Date(p.birthDate).toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" })}` : undefined}>
+                  {age} {ageWord(age)}
+                </span>
+              )}
               {currentReg && (
-                <button className="flex items-center gap-1.5 hover:text-gold" onClick={() => navigate(`/team/${currentReg.team.id}`)}>
+                <button className="flex items-center gap-1.5 text-ink2 hover:text-gold" onClick={() => navigate(`/team/${currentReg.team.id}`)}>
                   <Crest name={currentReg.team.name} id={currentReg.team.id} size="xs" />
                   {currentReg.team.name}
+                  {currentNumber && <span className="font-mono text-ink3">№{currentNumber}</span>
+                  }
                 </button>
               )}
+              {p.referee?.debut && <span>в судействе с {new Date(p.referee.debut).getFullYear()}</span>}
             </p>
           </div>
           {activeSusp.length > 0 && (
-            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-live/15 px-3 py-1.5 text-xs font-bold text-live">
+            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-live/15 px-3 py-1.5 text-xs font-bold text-live" title="Пропустит ближайшие матчи команды">
               <Ban className="h-3.5 w-3.5" /> дисквалифицирован
             </span>
           )}
@@ -171,6 +212,11 @@ export default function PlayerPage({ personId }: { personId: string }) {
                   <button className="min-w-0 font-semibold text-ink hover:text-gold" onClick={() => navigate(`/team/${r.team.id}`)}>
                     {r.team.name}
                   </button>
+                  {r.role === "COACH" && (
+                    <Badge variant="outline" className="border-amber-400/40 bg-amber-400/10 text-amber-300">
+                      <UserCog className="mr-1 h-3 w-3" />тренер
+                    </Badge>
+                  )}
                   <span className="hidden text-xs text-ink3 sm:inline">{r.season.league} · {r.season.name}</span>
                   <span className="ml-auto text-xs text-ink3">
                     {fmtShortDate(r.startDate)} — {r.endDate ? fmtShortDate(r.endDate) : "н.в."}
@@ -192,10 +238,7 @@ export default function PlayerPage({ personId }: { personId: string }) {
                       onClick={() => navigate(`/match/${e.match.id}`)}
                       className="flex w-full items-center gap-2 rounded-lg bg-s2/40 px-3 py-2 text-left text-sm hover:bg-s2/80"
                     >
-                      {e.type === "GOAL" || e.type === "PENALTY" ? <Goal className="h-3.5 w-3.5 shrink-0 text-gold" /> :
-                       e.type === "YELLOW_CARD" ? <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-400" /> :
-                       e.type === "RED_CARD" ? <OctagonX className="h-3.5 w-3.5 shrink-0 text-live" /> :
-                       <Repeat className="h-3.5 w-3.5 shrink-0 text-ink3" />}
+                      <EventIcon type={e.type} />
                       <span className="min-w-0 flex-1 truncate text-xs text-ink2">{e.match.home} — {e.match.away}</span>
                       <span className="ml-auto shrink-0 font-mono text-xs text-ink3">
                         {e.isAssist ? `ассист ${e.minute}&apos;` : `${EVENT_LABELS[e.type] ?? e.type} ${e.minute}&apos;`}
@@ -233,6 +276,35 @@ export default function PlayerPage({ personId }: { personId: string }) {
                     Средняя оценка капитанов: <b className="font-mono text-gold">{p.referee.avgRating}</b> из 5
                   </p>
                 )}
+
+                {/* Разбивка по лигам */}
+                {p.referee.byLeague.length > 0 && (
+                  <div className="mt-3 overflow-x-auto scrollbar-s21">
+                    <table className="w-full min-w-[420px] text-sm">
+                      <thead>
+                        <tr className="border-b border-sline/60 text-xs uppercase tracking-wide text-ink3">
+                          <th className="px-2 py-2 text-left font-semibold">Лига</th>
+                          <th className="px-2 py-2 text-center font-semibold">Матчи</th>
+                          <th className="px-2 py-2 text-center font-semibold">ЖК/м</th>
+                          <th className="px-2 py-2 text-center font-semibold">КК/м</th>
+                          <th className="px-2 py-2 text-center font-semibold">Рейтинг</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {p.referee.byLeague.map((l) => (
+                          <tr key={l.league} className="border-b border-sline/40 last:border-b-0">
+                            <td className="px-2 py-2 font-medium text-ink2">{l.league}</td>
+                            <td className="px-2 py-2 text-center tabular text-ink">{l.matches}</td>
+                            <td className="px-2 py-2 text-center tabular text-amber-400">{l.yellowAvg}</td>
+                            <td className="px-2 py-2 text-center tabular text-live">{l.redAvg}</td>
+                            <td className="px-2 py-2 text-center tabular font-bold text-gold">{l.avgRating ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
                 {p.referee.matchList.length > 0 && (
                   <div className="mt-3 max-h-64 space-y-1 overflow-y-auto scrollbar-s21">
                     {p.referee.matchList.map((m) => (
@@ -253,23 +325,48 @@ export default function PlayerPage({ personId }: { personId: string }) {
               </div>
             )}
 
-            {/* Игровая статистика по сезонам */}
+            {/* Игровая статистика по сезонам — таблица: лига·сезон·команда */}
             {p.statsBySeason.length > 0 && (
-              <div className="space-y-2">
-                {p.statsBySeason.map((s) => (
-                  <div key={s.season.id} className="rounded-xl border border-sline/50 p-3">
-                    <p className="mb-2 text-xs font-semibold text-ink2">{s.season.league} · {s.season.name}</p>
-                    <div className="grid grid-cols-4 gap-2 text-center sm:grid-cols-7">
-                      <StatTile value={s.stats.games} label="матчи" />
-                      <StatTile value={s.stats.goals} label="голы" accent />
-                      <StatTile value={s.stats.penalties} label="пен." />
-                      <StatTile value={s.stats.assists} label="ассисты" />
-                      <StatTile value={s.stats.yellowCards} label="ЖК" />
-                      <StatTile value={s.stats.redCards} label="КК" />
-                      <StatTile value={s.stats.cleanSheets} label="сухие" />
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-x-auto scrollbar-s21">
+                <table className="w-full min-w-[560px] text-sm">
+                  <thead>
+                    <tr className="border-b border-sline/60 text-xs uppercase tracking-wide text-ink3">
+                      <th className="px-2 py-2 text-left font-semibold">Лига · сезон</th>
+                      <th className="px-2 py-2 text-left font-semibold">Команда</th>
+                      <th className="px-2 py-2 text-center font-semibold" title="Матчи">И</th>
+                      <th className="px-2 py-2 text-center font-semibold" title="Голы">Г</th>
+                      <th className="px-2 py-2 text-center font-semibold" title="Пенальти">П</th>
+                      <th className="px-2 py-2 text-center font-semibold" title="Ассисты">А</th>
+                      <th className="px-2 py-2 text-center font-semibold" title="Жёлтые">ЖК</th>
+                      <th className="px-2 py-2 text-center font-semibold" title="Красные">КК</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {p.statsBySeason.map((s, i) => (
+                      <tr key={i} className="border-b border-sline/40 last:border-b-0 hover:bg-s2/40">
+                        <td className="px-2 py-2.5">
+                          <span className="block text-xs font-semibold text-ink">{s.season.league}</span>
+                          <span className="block text-[10px] text-ink3">{s.season.name}</span>
+                        </td>
+                        <td className="px-2 py-2.5">
+                          <button className="flex items-center gap-1.5 text-ink2 hover:text-gold" onClick={() => navigate(`/team/${s.team.id}`)}>
+                            <Crest name={s.team.name} id={s.team.id} size="xs" />
+                            <span className="truncate text-xs font-medium">{s.team.name}</span>
+                          </button>
+                        </td>
+                        <td className="px-2 py-2.5 text-center tabular text-ink">{s.stats.games}</td>
+                        <td className="px-2 py-2.5 text-center tabular font-bold text-gold">{s.stats.goals}</td>
+                        <td className="px-2 py-2.5 text-center tabular text-ink2">{s.stats.penalties}</td>
+                        <td className="px-2 py-2.5 text-center tabular text-ink2">{s.stats.assists}</td>
+                        <td className="px-2 py-2.5 text-center tabular text-amber-400">{s.stats.yellowCards}</td>
+                        <td className="px-2 py-2.5 text-center tabular text-live">{s.stats.redCards}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="px-2 pt-2 text-[10px] text-ink3">
+                  Техпоражения (WO) не учитываются в индивидуальной статистике — инвариант Epic 2.
+                </p>
               </div>
             )}
             {p.statsBySeason.length === 0 && !p.referee && (
@@ -290,6 +387,7 @@ export default function PlayerPage({ personId }: { personId: string }) {
                 <div key={i} className={cn("mb-2 rounded-xl border px-3 py-2.5 text-sm last:mb-0", s.isActive ? "border-live/40 bg-live/10" : "border-sline/50 bg-s2/30")}>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-ink">{SOURCE_LABELS[s.source] ?? s.source}</span>
+                    <span className="text-xs text-ink3">{s.league}</span>
                     <span className="text-xs text-ink3">{fmtDate(s.createdAt, false)}</span>
                     <span className={cn("ml-auto text-xs font-bold", s.isActive ? "text-live" : "text-ink3")}>
                       {s.isLifetime ? "пожизненно" : s.isActive ? `осталось ${s.matchesTotal - s.matchesServed} матч.` : `отбыто ${s.matchesServed}/${s.matchesTotal}`}

@@ -17,7 +17,7 @@ export interface LeagueDTO {
 export interface MatchDayDTO {
   league: { id: string; name: string; shortName: string | null; format: string; isPinned: boolean; walkoverScore: number };
   season: { id: string; name: string };
-  matches: MatchDTO[];
+  matches: LivescoreMatchDTO[];
 }
 
 export interface BannerDTO {
@@ -64,6 +64,34 @@ export interface MatchDTO {
   referee: { id: string; name: string } | null;
   regulationScore: number;
 }
+
+// ---------- Сигналы турнира (лента и карточка матча) ----------
+
+export interface StreakDTO {
+  /** W | D | L | T (техпоражение) | w (техпобеда) */
+  code: string;
+  count: number;
+}
+
+export interface MatchSignalSideDTO {
+  position: number | null;
+  points: number | null;
+  games: number | null;
+  streak: StreakDTO | null;
+  topScorer: { personId: string; name: string; goals: number } | null;
+  topScorerOut: boolean;
+  newCoach: { personId: string; name: string } | null;
+}
+
+export interface MatchSignalsDTO {
+  home: MatchSignalSideDTO;
+  away: MatchSignalSideDTO;
+  important: { flag: boolean; reason: string };
+  roundsLeft: number | null;
+}
+
+/** Матч ленты с сигналами */
+export type LivescoreMatchDTO = MatchDTO & { signals?: MatchSignalsDTO };
 
 export interface PlayerStatRowDTO {
   personId: string;

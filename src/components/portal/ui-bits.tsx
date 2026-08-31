@@ -4,7 +4,8 @@
 // автоматически выглядят корректно и в тёмной теме сайта, и в светлой админке.
 
 import { cn } from "@/lib/utils";
-import { Loader2, SearchX } from "lucide-react";
+import { Flame, Loader2, SearchX, Snowflake } from "lucide-react";
+import { STREAK_LABELS } from "@/lib/labels";
 
 /** Отображаемый счёт матча с учётом регламентного WO-счёта (COALESCE-логика PRD Epic 2) */
 export function matchScore(m: {
@@ -63,6 +64,25 @@ export function FormBadges({ form }: { form: string[] }) {
         );
       })}
     </div>
+  );
+}
+
+/** Серия команды: 🔥 победы / ❄ поражения (порог 3+) — «эмоция турнира» */
+export function StreakMark({ streak, compact, className }: { streak: { code: string; count: number } | null | undefined; compact?: boolean; className?: string }) {
+  if (!streak) return null;
+  const hot = (streak.code === "W" || streak.code === "w") && streak.count >= 3;
+  const cold = (streak.code === "L" || streak.code === "T") && streak.count >= 3;
+  if (!hot && !cold) return null;
+  const word = STREAK_LABELS[streak.code] ?? "матчей";
+  const title = hot ? `Команда на огне: ${streak.count} ${word} подряд` : `Команда в кризисе: ${streak.count} ${word} подряд`;
+  return (
+    <span
+      title={title}
+      className={cn("inline-flex items-center gap-1 text-[11px] font-bold", hot ? "streak-hot" : "streak-cold", className)}
+    >
+      {hot ? <Flame className="h-3.5 w-3.5 streak-hot-glow" /> : <Snowflake className="h-3.5 w-3.5" />}
+      {!compact && <span>{streak.count}</span>}
+    </span>
   );
 }
 
