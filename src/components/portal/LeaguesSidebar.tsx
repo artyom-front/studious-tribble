@@ -118,13 +118,13 @@ export default function LeaguesSidebar({ overview, version, activeLeagueId, favs
               >
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform text-ink3", open && "rotate-180")} />
                 {label}
-                <span className="ml-auto text-[10px] font-normal text-ink3">{group.length}</span>
+                <span className="ml-auto text-xs font-normal text-ink3">{group.length}</span>
               </button>
               {open && group.map((l) => <LeagueRow key={l.id} league={l} active={activeLeagueId === l.id} star />)}
             </div>
           );
         })}
-        {rest.length === 0 && <p className="px-3 py-2 text-[11px] text-ink3">Все лиги — в топе и избранном</p>}
+        {rest.length === 0 && <p className="px-3 py-2 text-xs text-ink3">Все лиги — в топе и избранном</p>}
       </div>
     </nav>
   );
@@ -148,15 +148,15 @@ function MiniStandings({ league, version }: { league: LeagueDTO; version: number
           onClick={() => navigate(`/team/${r.teamId}`)}
           className="flex w-full items-center gap-2 px-3 py-1.5 pl-7 text-xs text-ink2 hover:bg-s2/80 hover:text-ink"
         >
-          <span className="w-4 text-center font-mono text-[10px] text-ink3">{r.position}</span>
+          <span className="w-4 text-center font-mono text-xs text-ink3">{r.position}</span>
           <span className="min-w-0 flex-1 truncate text-left font-medium">{r.teamName}</span>
-          <span className="text-[10px] text-ink3">{r.games}</span>
+          <span className="text-xs text-ink3">{r.games}</span>
           <span className="w-6 text-right font-mono font-bold text-ink">{r.points}</span>
         </button>
       ))}
       <button
         onClick={() => navigate(`/league/${league.id}/table`)}
-        className="w-full px-3 py-1.5 text-right text-[11px] font-semibold text-gold hover:text-gold/80"
+        className="w-full px-3 py-1.5 text-right text-xs font-semibold text-gold hover:text-gold/80"
       >
         Полная таблица →
       </button>

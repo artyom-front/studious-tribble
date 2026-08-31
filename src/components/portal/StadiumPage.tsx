@@ -69,7 +69,7 @@ export default function StadiumPage({ stadiumId }: { stadiumId: string }) {
                 key={id}
                 onClick={() => setMatchFilter(id)}
                 className={cn(
-                  "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                  "rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
                   matchFilter === id ? "bg-gold text-goldink" : "bg-s2 text-ink2 hover:text-ink"
                 )}
               >
@@ -89,14 +89,14 @@ export default function StadiumPage({ stadiumId }: { stadiumId: string }) {
                 onClick={() => navigate(`/match/${m.id}`)}
                 className="flex w-full items-center gap-3 rounded-xl border border-sline/50 bg-s2/30 px-3 py-2.5 text-left text-sm hover:border-gold/40"
               >
-                <span className="w-16 shrink-0 text-[11px] text-ink3">
+                <span className="w-16 shrink-0 text-xs text-ink3">
                   {time.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", timeZone: "Europe/Moscow" })}
                 </span>
                 <Goal className="h-3.5 w-3.5 shrink-0 text-ink3" />
                 <span className="min-w-0 flex-1 truncate text-ink2">
                   {m.homeTeam.name} <span className="text-ink3">—</span> {m.awayTeam.name}
                 </span>
-                <span className="hidden truncate text-[11px] text-ink3 md:inline">{m.league.name}</span>
+                <span className="hidden truncate text-xs text-ink3 md:inline">{m.league.name}</span>
                 <span className={cn("shrink-0 font-mono text-sm font-bold", m.status === "WALKOVER" ? "text-amber-400" : "text-ink")}>
                   {score ? `${score.home}:${score.away}` : time.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" })}
                 </span>

@@ -1,8 +1,10 @@
 "use client";
 
 // Профиль персоны «Ночь под прожекторами»: возраст, позиция, текущая команда
-// и номер, роли (игрок/тренер/судья), статистика по лигам·сезонам·командам,
-// карьерные заявки/трансферы, дисциплина с прогрессом отбытия.
+// и номер, роли (игрок/тренер/судья), статистика по лигам·сезонам·командам.
+// Логика ролей (по примеру судьи): у судьи карьера — матчи и лиги, а НЕ клубы,
+// вкладки «Статистика» (игрок) и «Дисциплина» ему не показываются; у тренера —
+// команды, где руководил; комбинированные персоны видят все свои роли.
 
 import { useState } from "react";
 import { Flag, Star, Shield, UserCog, Ban, ArrowRightLeft } from "lucide-react";
@@ -66,6 +68,13 @@ function ageWord(n: number): string {
   if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "года";
   return "лет";
 }
+/** «1 матч» / «2 матча» / «5 матчей» */
+function matchesWord(n: number): string {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return `${n} матч`;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `${n} матча`;
+  return `${n} матчей`;
+}
 
 type Tab = "career" | "stats" | "discipline";
 
@@ -78,7 +87,14 @@ export default function PlayerPage({ personId }: { personId: string }) {
 
   const p = data.player;
 
-  // Карьерные суммы по всем сезонам
+  // ---------- Роли: профиль подстраивается под то, кем человек является ----------
+  const isRef = p.isReferee && !!p.referee;
+  const hasReg = p.registrations.length > 0;
+  const hasPlayerRole = hasReg && p.registrations.some((r) => r.role === "PLAYER") || p.statsBySeason.length > 0;
+  const hasCoachRole = hasReg && p.registrations.some((r) => r.role === "COACH");
+  const isRefereeOnly = isRef && !hasReg;
+
+  // Карьерные суммы по всем сезонам (игровая карьера)
   const career = p.statsBySeason.reduce(
     (a, s) => ({
       games: a.games + s.stats.games,
@@ -93,20 +109,19 @@ export default function PlayerPage({ personId }: { personId: string }) {
   const currentReg = p.registrations.find((r) => !r.endDate && r.role === "PLAYER") ?? p.registrations.find((r) => !r.endDate);
   const activeSusp = p.suspensions.filter((s) => s.isActive);
   const roles: string[] = [];
-  if (p.isReferee) roles.push("судья");
-  if (p.registrations.some((r) => r.role === "COACH")) roles.push("тренер");
-  if (p.registrations.some((r) => r.role === "PLAYER")) roles.push("игрок");
-  const isCoachOnly = roles.length === 1 && roles[0] === "тренер";
+  if (isRef) roles.push("судья");
+  if (hasCoachRole) roles.push("тренер");
+  if (hasPlayerRole) roles.push("игрок");
   const age = p.birthDate ? ageOf(p.birthDate) : null;
   const currentNumber = currentReg?.role === "PLAYER" ? currentReg.number : null;
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "career", label: "Карьера" },
-    { id: "stats", label: p.isReferee && career.games === 0 ? "Статистика судьи" : "Статистика" },
-    { id: "discipline", label: `Дисциплина${p.suspensions.length ? ` · ${p.suspensions.length}` : ""}` },
-  ];
+  // Вкладки — по фактическим ролям, а не «всем подряд»:
+  // судья без игровой карьеры не видит ни игровой статистики, ни дисциплины
+  const tabs: { id: Tab; label: string }[] = [{ id: "career", label: "Карьера" }];
+  if (p.statsBySeason.length > 0) tabs.push({ id: "stats", label: "Статистика" });
+  if (hasPlayerRole || p.suspensions.length > 0) tabs.push({ id: "discipline", label: `Дисциплина${p.suspensions.length ? ` · ${p.suspensions.length}` : ""}` });
 
-  const crumb = roles.length === 1 && roles[0] === "судья" ? "Судьи" : isCoachOnly ? "Тренеры" : "Игроки";
+  const crumb = isRefereeOnly ? "Судьи" : roles.length === 1 && roles[0] === "тренер" ? "Тренеры" : "Игроки";
 
   return (
     <div className="space-y-3">
@@ -171,7 +186,7 @@ export default function PlayerPage({ personId }: { personId: string }) {
           )}
         </div>
 
-        {/* Карьерные показатели */}
+        {/* Карьерные показатели: у игрока — игровая карьера, у судьи — судейская */}
         {career.games > 0 && (
           <div className="grid grid-cols-5 gap-2 border-t border-sline/60 px-4 py-3">
             <StatTile value={career.games} label="матчи" />
@@ -179,6 +194,14 @@ export default function PlayerPage({ personId }: { personId: string }) {
             <StatTile value={career.assists} label="ассисты" />
             <StatTile value={career.yellow} label="ЖК" />
             <StatTile value={career.red} label="КК" />
+          </div>
+        )}
+        {career.games === 0 && isRef && p.referee && (
+          <div className="grid grid-cols-4 gap-2 border-t border-sline/60 px-4 py-3">
+            <StatTile value={p.referee.matches} label="матчи" accent />
+            <StatTile value={p.referee.yellowAvg} label="ЖК/матч" />
+            <StatTile value={p.referee.redAvg} label="КК/матч" />
+            <StatTile value={p.referee.avgRating ?? "—"} label="рейтинг" accent />
           </div>
         )}
       </div>
@@ -201,62 +224,12 @@ export default function PlayerPage({ personId }: { personId: string }) {
           ))}
         </div>
 
-        {/* ---- Карьера: заявки/трансферы + события ---- */}
+        {/* ---- Карьера: заявки/трансферы (игроки и тренеры) + судейская карьера (судьи) ---- */}
         {tab === "career" && (
           <div className="p-4">
-            <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink"><ArrowRightLeft className="h-4 w-4 text-gold" /> Заявки и трансферы</p>
-            <div className="space-y-1.5">
-              {p.registrations.map((r, i) => (
-                <div key={i} className="flex flex-wrap items-center gap-2.5 rounded-xl border border-sline/50 bg-s2/30 px-3 py-2.5 text-sm">
-                  <Crest name={r.team.name} id={r.team.id} size="sm" />
-                  <button className="min-w-0 font-semibold text-ink hover:text-gold" onClick={() => navigate(`/team/${r.team.id}`)}>
-                    {r.team.name}
-                  </button>
-                  {r.role === "COACH" && (
-                    <Badge variant="outline" className="border-amber-400/40 bg-amber-400/10 text-amber-300">
-                      <UserCog className="mr-1 h-3 w-3" />тренер
-                    </Badge>
-                  )}
-                  <span className="hidden text-xs text-ink3 sm:inline">{r.season.league} · {r.season.name}</span>
-                  <span className="ml-auto text-xs text-ink3">
-                    {fmtShortDate(r.startDate)} — {r.endDate ? fmtShortDate(r.endDate) : "н.в."}
-                  </span>
-                  {r.number && <Badge variant="secondary" className="bg-s2 font-mono text-ink2">№{r.number}</Badge>}
-                  {r.endDate && <Badge variant="outline" className="border-amber-400/40 bg-amber-400/10 text-amber-300">отзаявлен</Badge>}
-                </div>
-              ))}
-              {p.registrations.length === 0 && <p className="py-4 text-center text-sm text-ink3">Заявок не найдено</p>}
-            </div>
-
-            {p.events.length > 0 && (
-              <>
-                <p className="mb-2 mt-5 text-sm font-bold text-ink">Участие в событиях</p>
-                <div className="max-h-72 space-y-1 overflow-y-auto scrollbar-s21">
-                  {p.events.map((e) => (
-                    <button
-                      key={e.id}
-                      onClick={() => navigate(`/match/${e.match.id}`)}
-                      className="flex w-full items-center gap-2 rounded-lg bg-s2/40 px-3 py-2 text-left text-sm hover:bg-s2/80"
-                    >
-                      <EventIcon type={e.type} />
-                      <span className="min-w-0 flex-1 truncate text-xs text-ink2">{e.match.home} — {e.match.away}</span>
-                      <span className="ml-auto shrink-0 font-mono text-xs text-ink3">
-                        {e.isAssist ? `ассист ${e.minute}&apos;` : `${EVENT_LABELS[e.type] ?? e.type} ${e.minute}&apos;`}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ---- Статистика ---- */}
-        {tab === "stats" && (
-          <div className="p-4">
-            {/* Судейская карьера */}
-            {p.referee && (
-              <div className="mb-4 rounded-xl border border-sline/50 p-3">
+            {/* Судейская карьера — самостоятельная, к клубам отношения не имеет */}
+            {isRef && p.referee && (
+              <div className={cn("rounded-xl border border-sline/50 p-3", hasReg && "mb-4")}>
                 <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink"><Flag className="h-4 w-4 text-gold" /> Судейская карьера</p>
                 <div className="grid grid-cols-3 gap-2 text-center sm:grid-cols-6">
                   {[
@@ -325,8 +298,61 @@ export default function PlayerPage({ personId }: { personId: string }) {
               </div>
             )}
 
-            {/* Игровая статистика по сезонам — таблица: лига·сезон·команда */}
-            {p.statsBySeason.length > 0 && (
+            {/* Клубная карьера: заявки/трансферы — только у игроков и тренеров */}
+            {hasReg && (
+              <>
+                <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink"><ArrowRightLeft className="h-4 w-4 text-gold" /> Заявки и трансферы</p>
+                <div className="space-y-1.5">
+                  {p.registrations.map((r, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2.5 rounded-xl border border-sline/50 bg-s2/30 px-3 py-2.5 text-sm">
+                      <Crest name={r.team.name} id={r.team.id} size="sm" />
+                      <button className="min-w-0 font-semibold text-ink hover:text-gold" onClick={() => navigate(`/team/${r.team.id}`)}>
+                        {r.team.name}
+                      </button>
+                      {r.role === "COACH" && (
+                        <Badge variant="outline" className="border-amber-400/40 bg-amber-400/10 text-amber-300">
+                          <UserCog className="mr-1 h-3 w-3" />тренер
+                        </Badge>
+                      )}
+                      <span className="hidden text-xs text-ink3 sm:inline">{r.season.league} · {r.season.name}</span>
+                      <span className="ml-auto text-xs text-ink3">
+                        {fmtShortDate(r.startDate)} — {r.endDate ? fmtShortDate(r.endDate) : "н.в."}
+                      </span>
+                      {r.number && <Badge variant="secondary" className="bg-s2 font-mono text-ink2">№{r.number}</Badge>}
+                      {r.endDate && <Badge variant="outline" className="border-amber-400/40 bg-amber-400/10 text-amber-300">отзаявлен</Badge>}
+                    </div>
+                  ))}
+                </div>
+
+                {p.events.length > 0 && (
+                  <>
+                    <p className="mb-2 mt-5 text-sm font-bold text-ink">Участие в событиях</p>
+                    <div className="max-h-72 space-y-1 overflow-y-auto scrollbar-s21">
+                      {p.events.map((e) => (
+                        <button
+                          key={e.id}
+                          onClick={() => navigate(`/match/${e.match.id}`)}
+                          className="flex w-full items-center gap-2 rounded-lg bg-s2/40 px-3 py-2 text-left text-sm hover:bg-s2/80"
+                        >
+                          <EventIcon type={e.type} />
+                          <span className="min-w-0 flex-1 truncate text-xs text-ink2">{e.match.home} — {e.match.away}</span>
+                          <span className="ml-auto shrink-0 font-mono text-xs text-ink3">
+                            {e.isAssist ? `ассист ${e.minute}&apos;` : e.type === "GOAL" || e.type === "PENALTY" ? `гол ${e.minute}&apos;` : `${EVENT_LABELS[e.type] ?? e.type} ${e.minute}&apos;`}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ---- Игровая статистика по сезонам: лига·сезон·команда ---- */}
+        {tab === "stats" && (
+          <div className="p-4">
+            {p.statsBySeason.length > 0 ? (
               <div className="overflow-x-auto scrollbar-s21">
                 <table className="w-full min-w-[560px] text-sm">
                   <thead>
@@ -346,7 +372,7 @@ export default function PlayerPage({ personId }: { personId: string }) {
                       <tr key={i} className="border-b border-sline/40 last:border-b-0 hover:bg-s2/40">
                         <td className="px-2 py-2.5">
                           <span className="block text-xs font-semibold text-ink">{s.season.league}</span>
-                          <span className="block text-[10px] text-ink3">{s.season.name}</span>
+                          <span className="block text-xs text-ink3">{s.season.name}</span>
                         </td>
                         <td className="px-2 py-2.5">
                           <button className="flex items-center gap-1.5 text-ink2 hover:text-gold" onClick={() => navigate(`/team/${s.team.id}`)}>
@@ -364,18 +390,17 @@ export default function PlayerPage({ personId }: { personId: string }) {
                     ))}
                   </tbody>
                 </table>
-                <p className="px-2 pt-2 text-[10px] text-ink3">
+                <p className="px-2 pt-2 text-xs text-ink3">
                   Техпоражения (WO) не учитываются в индивидуальной статистике — инвариант Epic 2.
                 </p>
               </div>
-            )}
-            {p.statsBySeason.length === 0 && !p.referee && (
+            ) : (
               <EmptyState icon={<Shield className="h-6 w-6 opacity-50" />} title="Игровой статистики нет" hint="Персона не участвовала в матчах как игрок" />
             )}
           </div>
         )}
 
-        {/* ---- Дисциплина ---- */}
+        {/* ---- Дисциплина: только у игроков (судьям карточки не показывают) ---- */}
         {tab === "discipline" && (
           <div className="p-4">
             {p.suspensions.length === 0 && (
@@ -390,7 +415,7 @@ export default function PlayerPage({ personId }: { personId: string }) {
                     <span className="text-xs text-ink3">{s.league}</span>
                     <span className="text-xs text-ink3">{fmtDate(s.createdAt, false)}</span>
                     <span className={cn("ml-auto text-xs font-bold", s.isActive ? "text-live" : "text-ink3")}>
-                      {s.isLifetime ? "пожизненно" : s.isActive ? `осталось ${s.matchesTotal - s.matchesServed} матч.` : `отбыто ${s.matchesServed}/${s.matchesTotal}`}
+                      {s.isLifetime ? "пожизненно" : s.isActive ? `осталось ${matchesWord(s.matchesTotal - s.matchesServed)}` : `отбыто ${s.matchesServed}/${s.matchesTotal}`}
                     </span>
                   </div>
                   {!s.isLifetime && (

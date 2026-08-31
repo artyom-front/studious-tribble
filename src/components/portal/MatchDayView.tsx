@@ -143,7 +143,7 @@ export default function MatchDayView({ format, version, favs, onToggleFav }: Pro
             >
               {l.league.name}
             </button>
-            <span className="hidden text-[11px] text-ink3 sm:inline">· {l.season.name}</span>
+            <span className="hidden text-xs text-ink3 sm:inline">· {l.season.name}</span>
             <div className="ml-auto flex items-center gap-1">
               <button
                 onClick={() => onToggleFav(l.league.id)}
@@ -201,7 +201,7 @@ function MatchRow({ m }: { m: LivescoreMatchDTO }) {
             <span className="h-1.5 w-1.5 rounded-full bg-live live-dot" />
             {liveMinute}
           </span>
-          <span className="text-[10px] text-ink3">с {timeStr}</span>
+          <span className="text-xs text-ink3">с {timeStr}</span>
         </span>
       ) : m.status === "SCHEDULED" || m.status === "POSTPONED" ? (
         <span className="font-mono text-xs font-semibold tabular text-ink2">{timeStr}</span>
@@ -273,14 +273,14 @@ function TeamSignals({ side }: { side?: MatchSignalSideDTO }) {
 /** Легенда условных обозначений — сворачиваемая, чтобы не занимать экран */
 function SignalsLegend() {
   const items: { icon: React.ReactNode; text: string }[] = [
-    { icon: <Flame className="h-3.5 w-3.5 streak-hot streak-hot-glow" />, text: "команда «на огне» — 3+ победы подряд" },
-    { icon: <Snowflake className="h-3.5 w-3.5 streak-cold" />, text: "кризис — 3+ поражений подряд" },
+    { icon: <Flame className="h-3.5 w-3.5 streak-hot streak-hot-glow" />, text: "команда «на огне» — 5+ побед подряд" },
+    { icon: <Snowflake className="h-3.5 w-3.5 streak-cold" />, text: "кризис — 5+ поражений подряд" },
     { icon: <Trophy className="h-3.5 w-3.5 text-gold" />, text: "важный матч: борьба за 1-е место или призы, финиш турнира" },
     { icon: <UserX className="h-3.5 w-3.5 text-live" />, text: "у команды не сыграет лучший бомбардир (дисквалификация)" },
     { icon: <UserCog className="h-3.5 w-3.5 text-amber-300" />, text: "у команды новый тренер (последние 30 дней)" },
     { icon: <span className="h-1.5 w-1.5 rounded-full bg-live" />, text: "LIVE — счёт обновляется автоматически; рядом идущая минута и время начала" },
-    { icon: <span className="text-[9px] font-bold text-warn">Т</span>, text: "форма: В/Н/П — результат, Т — техпоражение, тВ — техпобеда" },
-    { icon: <span className="font-mono text-[10px] text-ink3">— : —</span>, text: "матч ещё не сыгран (дата и время слева)" },
+    { icon: <span className="text-xs font-bold text-warn">Т</span>, text: "форма: В/Н/П — результат, Т — техпоражение, тВ — техпобеда" },
+    { icon: <span className="font-mono text-xs text-ink3">— : —</span>, text: "матч ещё не сыгран (дата и время слева)" },
   ];
   return (
     <details className="group rounded-xl border border-sline bg-s1">

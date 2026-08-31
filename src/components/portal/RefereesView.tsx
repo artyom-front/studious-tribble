@@ -43,15 +43,15 @@ export default function RefereesView({ seasonId, version }: { seasonId: string; 
             <div className="mt-4 grid grid-cols-3 gap-2 text-center">
               <div className="rounded-lg bg-s2 py-2">
                 <p className="font-mono text-lg font-bold text-amber-400">{r.yellowAvg}</p>
-                <p className="text-[11px] text-ink3">ЖК за матч</p>
+                <p className="text-xs text-ink3">ЖК за матч</p>
               </div>
               <div className="rounded-lg bg-s2 py-2">
                 <p className="font-mono text-lg font-bold text-live">{r.redAvg}</p>
-                <p className="text-[11px] text-ink3">КК за матч</p>
+                <p className="text-xs text-ink3">КК за матч</p>
               </div>
               <div className="rounded-lg bg-s2 py-2">
                 <p className="font-mono text-lg font-bold text-ink2">{r.penaltyAvg}</p>
-                <p className="text-[11px] text-ink3">Пенальти</p>
+                <p className="text-xs text-ink3">Пенальти</p>
               </div>
             </div>
 
@@ -63,7 +63,7 @@ export default function RefereesView({ seasonId, version }: { seasonId: string; 
                     <Star key={i} className={cn("h-4 w-4", i <= Math.round(r.avgRating!) ? "fill-gold text-gold" : "text-ink3")} />
                   ))}
                   <span className="ml-1 font-mono text-sm font-bold text-gold">{r.avgRating}</span>
-                  <span className="text-[11px] text-ink3">({r.ratingsCount})</span>
+                  <span className="text-xs text-ink3">({r.ratingsCount})</span>
                 </span>
               ) : (
                 <span className="text-xs text-ink3">нет оценок</span>

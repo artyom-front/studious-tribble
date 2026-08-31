@@ -182,7 +182,7 @@ export default function AdminShell({ user, version, bump, onReload, focusMatchId
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold font-mono text-lg font-black text-white">{BRAND.mark}</span>
           <span className="text-left leading-none">
             <span className="block text-base font-black tracking-tight text-zinc-900">{BRAND.name}</span>
-            <span className="mt-0.5 block text-[10px] font-medium text-zinc-400">панель управления</span>
+            <span className="mt-0.5 block text-xs font-medium text-zinc-400">панель управления</span>
           </span>
         </button>
 
@@ -196,7 +196,7 @@ export default function AdminShell({ user, version, bump, onReload, focusMatchId
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-bold text-zinc-800">{user.personName ?? user.email}</p>
-              <p className="truncate text-[10px] text-zinc-400">{ROLE_LABELS[user.role]}</p>
+              <p className="truncate text-xs text-zinc-400">{ROLE_LABELS[user.role]}</p>
             </div>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-1.5">
@@ -246,7 +246,7 @@ export default function AdminShell({ user, version, bump, onReload, focusMatchId
           >
             <Search className="h-4 w-4 shrink-0" />
             <span className="flex-1 truncate text-left">Команда, игрок, лига…</span>
-            <kbd className="shrink-0 rounded border border-zinc-200 bg-white px-1.5 py-0.5 font-mono text-[10px]">/</kbd>
+            <kbd className="shrink-0 rounded border border-zinc-200 bg-white px-1.5 py-0.5 font-mono text-xs">/</kbd>
           </button>
 
           {/* Колокол алертов */}
@@ -260,7 +260,7 @@ export default function AdminShell({ user, version, bump, onReload, focusMatchId
             >
               <Bell className="h-4 w-4 text-zinc-500" />
               {alerts.length > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-bold text-white">
                   {alerts.length}
                 </span>
               )}
@@ -334,7 +334,7 @@ function AdminNav({ groups, sections, section, onSelect }: {
     <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 py-4 scrollbar-s21" aria-label="Разделы админки">
       {groups.map((g) => (
         <div key={g}>
-          <p className="px-3 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">{g}</p>
+          <p className="px-3 pb-1.5 pt-1 text-xs font-bold uppercase tracking-wider text-zinc-400">{g}</p>
           {sections.filter((s) => s.group === g).map((s) => (
             <button
               key={s.id}

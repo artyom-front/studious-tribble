@@ -2,7 +2,52 @@ import { db } from "@/lib/db";
 import { errorResponse, HttpError } from "@/lib/http";
 import { seasonStandings } from "@/lib/queries";
 import { seasonPlayerStats } from "@/lib/engine/stats";
-import { buildSignalsContext, matchSignals } from "@/lib/engine/signals";
+import { buildSignalsContext, matchSignals, plural } from "@/lib/engine/signals";
+
+/** Порог «разгрома» для превью: 10+ мячей в одном матче */
+const ROUT_THRESHOLD = 10;
+
+interface TeamInsight {
+  last5: { scored: number; conceded: number; matches: number } | null;
+  /** самое крупное взятие ворот — если 10+, это факт для превью */
+  rout: { goals: number; opponent: string; date: string; score: string } | null;
+  /** самое крупное поражение — если пропустила 10+ */
+  collapse: { goals: number; opponent: string; date: string; score: string } | null;
+}
+
+/** Инсайты команды для превью матча: голы в последних 5 матчах,
+ *  разгромы и провалы за всю историю (все сезоны). */
+async function teamInsights(teamId: string): Promise<TeamInsight> {
+  const ms = await db.match.findMany({
+    where: { status: "COMPLETED", OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }] },
+    include: {
+      homeTeam: { select: { id: true, name: true } },
+      awayTeam: { select: { id: true, name: true } },
+    },
+    orderBy: { kickoff: "desc" },
+  });
+  let scored = 0, conceded = 0;
+  let rout: TeamInsight["rout"] = null;
+  let collapse: TeamInsight["collapse"] = null;
+  ms.forEach((m, i) => {
+    const isHome = m.homeTeamId === teamId;
+    const my = (isHome ? m.homeScore : m.awayScore) ?? 0;
+    const opp = (isHome ? m.awayScore : m.homeScore) ?? 0;
+    const oppName = isHome ? m.awayTeam.name : m.homeTeam.name;
+    if (i < 5) { scored += my; conceded += opp; }
+    if (my >= ROUT_THRESHOLD && (!rout || my > rout.goals)) {
+      rout = { goals: my, opponent: oppName, date: m.kickoff.toISOString(), score: `${my}:${opp}` };
+    }
+    if (opp >= ROUT_THRESHOLD && (!collapse || opp > collapse.goals)) {
+      collapse = { goals: opp, opponent: oppName, date: m.kickoff.toISOString(), score: `${my}:${opp}` };
+    }
+  });
+  return {
+    last5: ms.length > 0 ? { scored, conceded, matches: Math.min(5, ms.length) } : null,
+    rout,
+    collapse,
+  };
+}
 
 /** Детальная карточка матча: события, составы, судья, оценки,
  *  таблица сезона, личные встречи (H2H), кто пропускает матч. */
@@ -33,11 +78,14 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     // ---------- Таблица сезона (обе команды подсвечиваются на клиенте) ----------
     const standings = await seasonStandings(seasonId);
 
-    // ---------- Личные встречи (H2H) по всем сезонам этих команд ----------
+    // ---------- Личные встречи (H2H): только в этом же формате футбола ----------
+    // одна пара команд может встречаться и в 11×11, и в футзале — сравнивать
+    // «глухого с футзалистом» некорректно, поэтому фильтруем по формату лиги.
     const h2hMatches = await db.match.findMany({
       where: {
         status: { in: ["COMPLETED", "WALKOVER"] },
         kickoff: { lt: new Date() },
+        stage: { season: { league: { format: league.format } } },
         OR: [
           { homeTeamId: match.homeTeamId, awayTeamId: match.awayTeamId },
           { homeTeamId: match.awayTeamId, awayTeamId: match.homeTeamId },
@@ -97,7 +145,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
             where: { personId: s.personId, teamId: t.id, seasonId },
           });
           if (!reg) continue;
-          const left = s.isLifetime ? "бессрочно" : `${s.matchesTotal - s.matchesServed} матч(ей)`;
+          const left = s.isLifetime ? "бессрочно" : `${s.matchesTotal - s.matchesServed} ${plural(s.matchesTotal - s.matchesServed, "матч", "матча", "матчей")}`;
           entries.push({
             personId: s.personId,
             name: `${s.person.lastName} ${s.person.firstName}`,
@@ -127,6 +175,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       sigCtx,
       standings
     );
+
+    // ---------- Инсайты команд для вкладки «Превью» ----------
+    const insights = {
+      home: await teamInsights(match.homeTeamId),
+      away: await teamInsights(match.awayTeamId),
+    };
 
     return Response.json({
       match: {
@@ -187,6 +241,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       },
       missing,
       signals,
+      insights,
     });
   } catch (e) {
     return errorResponse(e);

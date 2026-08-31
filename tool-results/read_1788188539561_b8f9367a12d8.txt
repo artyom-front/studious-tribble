@@ -1,0 +1,649 @@
+     1→// Seed: демо-данные портала «Футбол Чувашии».
+     2→// Использует боевые движки (schedule, lifecycle, discipline) — dogfooding логики.
+     3→// Даты — динамические относительно «сегодня» (МСК): туры 1–3 сыграны, 4-й — сегодня (вкл. LIVE-матч).
+     4→
+     5→import { PrismaClient } from "@prisma/client";
+     6→import { scryptSync, randomBytes } from "crypto";
+     7→import { generateRoundRobin } from "../src/lib/engine/schedule";
+     8→import { completeMatch, assignWalkover } from "../src/lib/engine/lifecycle";
+     9→
+    10→const db = new PrismaClient();
+    11→
+    12→// ---------- Детерминированный RNG ----------
+    13→let seed = 20260831;
+    14→function rng(): number {
+    15→  seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+    16→  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    17→  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    18→  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    19→}
+    20→const ri = (min: number, max: number) => Math.floor(rng() * (max - min + 1)) + min;
+    21→const pick = <T>(arr: T[]): T => arr[Math.floor(rng() * arr.length)];
+    22→
+    23→function hashPassword(password: string): string {
+    24→  const salt = randomBytes(16).toString("hex");
+    25→  return `${salt}:${scryptSync(password, salt, 64).toString("hex")}`;
+    26→}
+    27→
+    28→// ---------- Даты (динамика от «сегодня», МСК) ----------
+    29→const MSK_OFFSET = 3 * 3600 * 1000;
+    30→const dayStr = (offsetDays: number): string => {
+    31→  const d = new Date(Date.now() + MSK_OFFSET + offsetDays * 86400000);
+    32→  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+    33→};
+    34→const today = dayStr(0);
+    35→const MSK = (dateStr: string, hour: number) => {
+    36→  const [y, mo, d] = dateStr.split("-").map(Number);
+    37→  return new Date(Date.UTC(y, mo - 1, d, hour) - MSK_OFFSET);
+    38→};
+    39→
+    40→// ---------- Справочники ----------
+    41→const FIRST = ["Алексей", "Иван", "Сергей", "Дмитрий", "Павел", "Евгений", "Михаил", "Андрей", "Максим", "Владислав", "Никита", "Артём", "Роман", "Кирилл", "Денис", "Юрий", "Илья", "Виктор", "Александр", "Егор", "Марат", "Рустам", "Айрат", "Наиль", "Ильдар", "Тимофей", "Владимир", "Григорий", "Олег", "Станислав"];
+    42→const LAST = ["Иванов", "Петров", "Кузнецов", "Смирнов", "Попов", "Васильев", "Павлов", "Семёнов", "Богданов", "Воробьёв", "Фёдоров", "Михайлов", "Белов", "Тарасов", "Комиссаров", "Давыдов", "Беляев", "Григорьев", "Панов", "Егоров", "Никитин", "Зайцев", "Артемьев", "Козлов", "Степанов", "Лебедев", "Антонов", "Максимов", "Крылов", "Гусев", "Денисов", "Коновалов", "Щербаков", "Тимофеев", "Орлов", "Афанасьев", "Филиппов", "Марков", "Романов", "Краснов", "Ерёмин", "Соловьёв", "Черкасов", "Николаев", "Гаврилов", "Захаров", "Яковлев", "Родионов", "Сафин", "Валиев"];
+    43→const MIDDLE = ["Александрович", "Иванович", "Сергеевич", "Дмитриевич", "Павлович", "Евгеньевич", "Михайлович", "Андреевич", "Максимович", "Владиславович", "Никитич", "Артёмович", "Романович", "Кириллович", "Юрьевич"];
+    44→
+    45→const usedNames = new Set<string>();
+    46→function makePersonData(position: string) {
+    47→  for (let i = 0; i < 200; i++) {
+    48→    const first = pick(FIRST), last = pick(LAST), middle = pick(MIDDLE);
+    49→    const key = `${last}|${first}|${middle}`;
+    50→    if (usedNames.has(key)) continue;
+    51→    usedNames.add(key);
+    52→    return {
+    53→      firstName: first, lastName: last, middleName: middle,
+    54→      birthDate: new Date(`${ri(1985, 2005)}-${String(ri(1, 12)).padStart(2, "0")}-${String(ri(1, 28)).padStart(2, "0")}T00:00:00Z`),
+    55→      position,
+    56→    };
+    57→  }
+    58→  return { firstName: "Игорь", lastName: `Игрок${ri(1, 999)}`, middleName: "Иванович", birthDate: null, position };
+    59→}
+    60→
+    61→const POSITIONS_F11 = ["GK", "GK", "DF", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "MF", "MF", "FW", "FW", "FW"];
+    62→const POSITIONS_FUTSAL = ["GK", "DF", "DF", "DF", "MF", "MF", "MF", "FW", "FW"];
+    63→const POSITIONS_F8 = ["GK", "DF", "DF", "DF", "MF", "MF", "FW", "FW"];
+    64→const POSITIONS_F6 = ["GK", "DF", "MF", "MF", "FW", "FW"];
+    65→
+    66→async function main() {
+    67→  console.log("🧹 Очистка БД...");
+    68→  const tables = ["auditLog", "refereeRating", "suspension", "lineupEntry", "matchEvent", "registration", "match", "stage", "season", "league", "banner", "stadium", "team", "club", "person", "user"];
+    69→  for (const t of tables as const) {
+    70→    // @ts-expect-error динамическое имя таблицы
+    71→    await db[t].deleteMany();
+    72→  }
+    73→
+    74→  // ---------- Стадионы ----------
+    75→  console.log("🏟 Стадионы...");
+    76→  const stadiumNames: [string, string, number][] = [
+    77→    ["Центральный", "Чебоксары", 15000], ["Олимпийский", "Новочебоксарск", 3200], ["Спартаковец", "Чебоксары", 1200],
+    78→    ["Сокол", "Алатырь", 2500], ["Юность", "Шумерля", 1500], ["Динамо", "Чебоксары", 800], ["Заря", "Кугеси", 600],
+    79→  ];
+    80→  const stadiums = await Promise.all(
+    81→    stadiumNames.map(([name, city, capacity]) => db.stadium.create({ data: { name, city, capacity, address: `г. ${city}` } }))
+    82→  );
+    83→
+    84→  // ---------- Клубы и команды (инвариант №1: Club ≠ Team) ----------
+    85→  console.log("⚽ Клубы и команды...");
+    86→  const teamDefsL1 = [
+    87→    ["Урняк", "Кугеси"], ["Спартак", "Чебоксары"], ["Энергия", "Новочебоксарск"], ["Сокол", "Алатырь"],
+    88→    ["Динамо", "Чебоксары"], ["Волга", "Чебоксары"], ["Химик", "Новочебоксарск"], ["Атал", "Шумерля"],
+    89→  ];
+    90→  const teamsL1: { id: string; name: string }[] = [];
+    91→  for (const [name, city] of teamDefsL1) {
+    92→    const club = await db.club.create({ data: { name: `ФК «${name}»`, city } });
+    93→    const team = await db.team.create({ data: { name: `${name}-${city.slice(0, 2).toUpperCase()}`, clubId: club.id, city } });
+    94→    teamsL1.push({ id: team.id, name: team.name });
+    95→  }
+    96→
+    97→  const teamDefsL2 = [["Стрела", "Чебоксары"], ["Ярославль-м", "Чебоксары"], ["Звезда", "Новочебоксарск"], ["Торпедо", "Алатырь"], ["Сигнал", "Шумерля"], ["Олимп", "Цивильск"]];
+    98→  const teamsL2: { id: string; name: string }[] = [];
+    99→  for (const [name, city] of teamDefsL2) {
+   100→    const club = await db.club.create({ data: { name: `МФК «${name}»`, city } });
+   101→    const team = await db.team.create({ data: { name: `М-${name}`, clubId: club.id, city } });
+   102→    teamsL2.push({ id: team.id, name: team.name });
+   103→  }
+   104→
+   105→  const teamDefsL3 = [["Труд", "Цивильск"], ["Смена", "Чебоксары"], ["Метеор", "Канаш"], ["Локомотив", "Новочебоксарск"], ["Родина", "Мариинский Посад"], ["Восход", "Ядрин"]];
+   106→  const teamsL3: { id: string; name: string }[] = [];
+   107→  for (const [name, city] of teamDefsL3) {
+   108→    const club = await db.club.create({ data: { name: `КК «${name}»`, city } });
+   109→    const team = await db.team.create({ data: { name: `${name}-8`, clubId: club.id, city } });
+   110→    teamsL3.push({ id: team.id, name: team.name });
+   111→  }
+   112→
+   113→  const teamDefsL4 = [["Факел", "Чебоксары"], ["Ротор", "Канаш"], ["Полёт", "Шумерля"], ["Знамя", "Алатырь"], ["Молот", "Цивильск"], ["Орбита", "Новочебоксарск"]];
+   114→  const teamsL4: { id: string; name: string }[] = [];
+   115→  for (const [name, city] of teamDefsL4) {
+   116→    const club = await db.club.create({ data: { name: `ФК «${name}-6»`, city } });
+   117→    const team = await db.team.create({ data: { name: `${name}-6`, clubId: club.id, city } });
+   118→    teamsL4.push({ id: team.id, name: team.name });
+   119→  }
+   120→
+   121→  // ---------- Лиги и сезоны ----------
+   122→  console.log("🏆 Лиги (4 формата)...");
+   123→  const league1 = await db.league.create({
+   124→    data: {
+   125→      name: "Премьер-лига ФФ Чувашии", shortName: "Премьер-лига", format: "F11",
+   126→      isPinned: true, priority: 1,
+   127→      yellowCardLimit: 3, yellowCardBanMatches: 1, redCardBanMatches: 1,
+   128→      walkoverScore: 3,
+   129→      transferWindowEnd: MSK(dayStr(15), 23),
+   130→    },
+   131→  });
+   132→  const league2 = await db.league.create({
+   133→    data: {
+   134→      name: "Мини-футбол. Высшая лига", shortName: "Высшая лига (мини)", format: "FUTSAL",
+   135→      isPinned: true, priority: 2,
+   136→      yellowCardLimit: 3, yellowCardBanMatches: 1, redCardBanMatches: 1,
+   137→      walkoverScore: 5,
+   138→    },
+   139→  });
+   140→  const league3 = await db.league.create({
+   141→    data: {
+   142→      name: "Восьмёрка. Высшая лига", shortName: "Высшая лига (8×8)", format: "F8",
+   143→      isPinned: true, priority: 3,
+   144→      yellowCardLimit: 3, yellowCardBanMatches: 1, redCardBanMatches: 1,
+   145→      walkoverScore: 3,
+   146→    },
+   147→  });
+   148→  const league4 = await db.league.create({
+   149→    data: {
+   150→      name: "Шестёрка. Открытая лига", shortName: "Открытая лига (6×6)", format: "F6",
+   151→      isPinned: false,
+   152→      yellowCardLimit: 4, yellowCardBanMatches: 1, redCardBanMatches: 1,
+   153→      walkoverScore: 3,
+   154→    },
+   155→  });
+   156→
+   157→  const seasonStart = MSK(dayStr(-30), 12);
+   158→  const season1 = await db.season.create({ data: { leagueId: league1.id, name: "Сезон 2026", startDate: seasonStart, isCurrent: true } });
+   159→  const season2 = await db.season.create({ data: { leagueId: league2.id, name: "Сезон 2026", startDate: seasonStart, isCurrent: true } });
+   160→  const season3 = await db.season.create({ data: { leagueId: league3.id, name: "Сезон 2026", startDate: seasonStart, isCurrent: true } });
+   161→  const season4 = await db.season.create({ data: { leagueId: league4.id, name: "Сезон 2026", startDate: seasonStart, isCurrent: true } });
+   162→
+   163→  // ---------- Игроки, тренеры и заявки ----------
+   164→  console.log("👥 Игроки, тренеры, заявки...");
+   165→  const createSquad = async (teamId: string, seasonId: string, positions: string[], startDate: Date) => {
+   166→    const players: { id: string; position: string }[] = [];
+   167→    let number = 1;
+   168→    for (const pos of positions) {
+   169→      const person = await db.person.create({ data: makePersonData(pos) });
+   170→      await db.registration.create({
+   171→        data: { personId: person.id, teamId, seasonId, startDate, number: number++ },
+   172→      });
+   173→      players.push({ id: person.id, position: pos });
+   174→    }
+   175→    // тренер (Registration.role = COACH — человек может быть тренером и игроком в разных лигах)
+   176→    const coach = await db.person.create({ data: makePersonData("MF") });
+   177→    await db.registration.create({
+   178→      data: { personId: coach.id, teamId, seasonId, startDate, role: "COACH" },
+   179→    });
+   180→    return players;
+   181→  };
+   182→
+   183→  const squadsL1 = new Map<string, { id: string; position: string }[]>();
+   184→  for (const t of teamsL1) squadsL1.set(t.id, await createSquad(t.id, season1.id, POSITIONS_F11, seasonStart));
+   185→  const squadsL2 = new Map<string, { id: string; position: string }[]>();
+   186→  for (const t of teamsL2) squadsL2.set(t.id, await createSquad(t.id, season2.id, POSITIONS_FUTSAL, seasonStart));
+   187→  const squadsL3 = new Map<string, { id: string; position: string }[]>();
+   188→  for (const t of teamsL3) squadsL3.set(t.id, await createSquad(t.id, season3.id, POSITIONS_F8, seasonStart));
+   189→  const squadsL4 = new Map<string, { id: string; position: string }[]>();
+   190→  for (const t of teamsL4) squadsL4.set(t.id, await createSquad(t.id, season4.id, POSITIONS_F6, seasonStart));
+   191→
+   192→  // ---------- Судьи ----------
+   193→  console.log("🧑‍⚖️ Судьи...");
+   194→  const refereeDefs = [
+   195→    ["Смирнов", "Александр", "Петрович"], ["Григорьев", "Николай", "Сергеевич"], ["Артемьев", "Владимир", "Иванович"],
+   196→  ];
+   197→  const referees = await Promise.all(
+   198→    refereeDefs.map(([lastName, firstName, middleName]) =>
+   199→      db.person.create({ data: { firstName, lastName, middleName, isReferee: true } })
+   200→    )
+   201→  );
+   202→
+   203→  // ---------- Пользователи ----------
+   204→  console.log("🔐 Пользователи...");
+   205→  const [superAdmin, leagueAdmin, refereeUser, clubUser] = await Promise.all([
+   206→    db.user.create({ data: { email: "admin@ff21.ru", passwordHash: hashPassword("admin123"), role: "SUPER_ADMIN" } }),
+   207→    db.user.create({ data: { email: "liga@ff21.ru", passwordHash: hashPassword("liga123"), role: "LEAGUE_ADMIN" } }),
+   208→    db.user.create({ data: { email: "sudya@ff21.ru", passwordHash: hashPassword("sudya123"), role: "REFEREE", personId: referees[0].id } }),
+   209→    db.user.create({ data: { email: "club@ff21.ru", passwordHash: hashPassword("club123"), role: "CLUB_ADMIN", clubId: (await db.club.findFirst({ where: { name: { contains: "Урняк" } } }))!.id } }),
+   210→  ]);
+   211→  console.log(`   admin@ff21.ru / liga@ff21.ru / sudya@ff21.ru / club@ff21.ru · seed ${today}`);
+   212→
+   213→  // ---------- Расписание (round-robin) ----------
+   214→  console.log("📅 Расписание...");
+   215→  const mkStage = (seasonId: string) =>
+   216→    db.stage.create({ data: { seasonId, name: "Регулярный чемпионат", type: "ROUND_ROBIN" } });
+   217→  const stage1 = await mkStage(season1.id);
+   218→  const stage2 = await mkStage(season2.id);
+   219→  const stage3 = await mkStage(season3.id);
+   220→  const stage4 = await mkStage(season4.id);
+   221→
+   222→  const slots1 = generateRoundRobin(teamsL1.map((t) => t.id), false); // 7 туров
+   223→  const slots2 = generateRoundRobin(teamsL2.map((t) => t.id), false); // 5 туров
+   224→  const slots3 = generateRoundRobin(teamsL3.map((t) => t.id), false); // 5 туров
+   225→  const slots4 = generateRoundRobin(teamsL4.map((t) => t.id), false); // 5 туров
+   226→
+   227→  const roundDatesL1 = [dayStr(-21), dayStr(-14), dayStr(-7), today, dayStr(7), dayStr(14), dayStr(21)];
+   228→  const roundDatesL2 = [dayStr(-14), dayStr(-7), today, dayStr(7), dayStr(14)];
+   229→  const roundDatesL3 = [dayStr(-7), today, dayStr(7), dayStr(14), dayStr(21)];
+   230→  const roundDatesL4 = [dayStr(-3), dayStr(1), dayStr(8), dayStr(15), dayStr(22)];
+   231→  const timesL1 = [11, 13, 15, 17];
+   232→  const timesL2 = [16, 18, 20];
+   233→  const timesL3 = [12, 14, 16];
+   234→  const timesL4 = [12, 14, 16];
+   235→
+   236→  type SeedMatch = { id: string; round: number; home: string; away: string; kickoff: Date };
+   237→
+   238→  const buildCalendar = async (
+   239→    slots: { round: number; homeTeamId: string; awayTeamId: string }[],
+   240→    stageId: string,
+   241→    roundDates: string[],
+   242→    times: number[],
+   243→    assignRefereesFrom?: number
+   244→  ): Promise<SeedMatch[]> => {
+   245→    const out: SeedMatch[] = [];
+   246→    const byRound = new Map<number, number>();
+   247→    for (const s of slots) {
+   248→      const idx = byRound.get(s.round) ?? 0;
+   249→      byRound.set(s.round, idx + 1);
+   250→      const stadium = stadiums[(s.round + idx) % stadiums.length];
+   251→      const hour = s.round === assignRefereesFrom ? times[idx % times.length] : times[idx % times.length];
+   252→      const refereeId = assignRefereesFrom && s.round >= assignRefereesFrom
+   253→        ? referees[(s.round + idx) % referees.length].id
+   254→        : null;
+   255→      const m = await db.match.create({
+   256→        data: {
+   257→          stageId, round: s.round,
+   258→          homeTeamId: s.homeTeamId, awayTeamId: s.awayTeamId,
+   259→          stadiumId: stadium.id,
+   260→          kickoff: MSK(roundDates[s.round - 1], hour),
+   261→          refereeId,
+   262→        },
+   263→      });
+   264→      out.push({ id: m.id, round: s.round, home: s.homeTeamId, away: s.awayTeamId, kickoff: m.kickoff });
+   265→    }
+   266→    return out;
+   267→  };
+   268→
+   269→  const matchesL1 = await buildCalendar(slots1, stage1.id, roundDatesL1, timesL1, 4);
+   270→  const matchesL2 = await buildCalendar(slots2, stage2.id, roundDatesL2, timesL2, 3);
+   271→  const matchesL3 = await buildCalendar(slots3, stage3.id, roundDatesL3, timesL3, 2);
+   272→  const matchesL4 = await buildCalendar(slots4, stage4.id, roundDatesL4, timesL4, 2);
+   273→
+   274→  // ---------- Симуляция сыгранных туров ----------
+   275→  console.log("📋 Протоколы сыгранных матчей...");
+   276→  const weightByPos: Record<string, number> = { FW: 5, MF: 3, DF: 1, GK: 0 };
+   277→
+   278→  const simulate = async (
+   279→    m: SeedMatch,
+   280→    squads: Map<string, { id: string; position: string }[]>,
+   281→    lineupSize: number,
+   282→    forced?: { redCard?: { side: "home" | "away"; minute: number }; yellows?: { side: "home" | "away"; personId?: string }[]; score?: [number, number] }
+   283→  ) => {
+   284→    const ref = pick(referees);
+   285→    await db.match.update({ where: { id: m.id }, data: { refereeId: ref.id } });
+   286→
+   287→    const homeSquad = squads.get(m.home)!;
+   288→    const awaySquad = squads.get(m.away)!;
+   289→    const choose = (squad: { id: string; position: string }[], mustInclude: string[] = []) => {
+   290→      const gk = squad.filter((p) => p.position === "GK");
+   291→      const must = squad.filter((p) => mustInclude.includes(p.id) && p.position !== "GK");
+   292→      const rest = squad.filter((p) => p.position !== "GK" && !mustInclude.includes(p.id));
+   293→      const shuffled = [...rest].sort(() => rng() - 0.5).slice(0, Math.max(0, lineupSize - gk.length - must.length));
+   294→      return [...gk, ...must, ...shuffled];
+   295→    };
+   296→    const mustHome = (forced?.yellows ?? []).filter((y) => y.side === "home" && y.personId).map((y) => y.personId!);
+   297→    const mustAway = (forced?.yellows ?? []).filter((y) => y.side === "away" && y.personId).map((y) => y.personId!);
+   298→    const homeLineup = choose(homeSquad, mustHome);
+   299→    const awayLineup = choose(awaySquad, mustAway);
+   300→
+   301→    await db.lineupEntry.createMany({
+   302→      data: [
+   303→        ...homeLineup.map((p, i) => ({ matchId: m.id, teamId: m.home, personId: p.id, isStarter: i < lineupSize - 3, number: i + 1 })),
+   304→        ...awayLineup.map((p, i) => ({ matchId: m.id, teamId: m.away, personId: p.id, isStarter: i < lineupSize - 3, number: i + 1 })),
+   305→      ],
+   306→    });
+   307→
+   308→    const homeGoals = forced?.score ? forced.score[0] : ri(0, 4);
+   309→    const awayGoals = forced?.score ? forced.score[1] : ri(0, 4);
+   310→    const events: { minute: number; type: string; personId: string; teamId: string; assistPersonId?: string }[] = [];
+   311→    const minutes = new Set<number>();
+   312→    const uniqueMinute = () => { let x = ri(1, 90); while (minutes.has(x)) x = ri(1, 90); minutes.add(x); return x; };
+   313→    const scorerFrom = (lineup: { id: string; position: string }[], team: { id: string; position: string }[]) => {
+   314→      const pool = [...lineup, ...team];
+   315→      const weighted: string[] = [];
+   316→      for (const p of pool) for (let i = 0; i < (weightByPos[p.position] ?? 1); i++) weighted.push(p.id);
+   317→      return pick(weighted);
+   318→    };
+   319→
+   320→    for (let g = 0; g < homeGoals; g++) {
+   321→      const personId = scorerFrom(homeLineup, homeSquad);
+   322→      const isPen = rng() < 0.12;
+   323→      let assistPersonId: string | undefined;
+   324→      if (!isPen && rng() < 0.6) {
+   325→        const cand = pick(homeLineup).id;
+   326→        if (cand !== personId) assistPersonId = cand;
+   327→      }
+   328→      events.push({ minute: uniqueMinute(), type: isPen ? "PENALTY" : "GOAL", personId, teamId: m.home, assistPersonId });
+   329→    }
+   330→    for (let g = 0; g < awayGoals; g++) {
+   331→      const personId = scorerFrom(awayLineup, awaySquad);
+   332→      const isPen = rng() < 0.12;
+   333→      let assistPersonId: string | undefined;
+   334→      if (!isPen && rng() < 0.6) {
+   335→        const cand = pick(awayLineup).id;
+   336→        if (cand !== personId) assistPersonId = cand;
+   337→      }
+   338→      events.push({ minute: uniqueMinute(), type: isPen ? "PENALTY" : "GOAL", personId, teamId: m.away, assistPersonId });
+   339→    }
+   340→
+   341→    const yc = ri(0, 3);
+   342→    for (let y = 0; y < yc; y++) {
+   343→      const home = rng() < 0.5;
+   344→      const lineup = home ? homeLineup : awayLineup;
+   345→      const p = pick(lineup);
+   346→      if (events.some((e) => e.personId === p.id && e.type === "RED_CARD")) continue;
+   347→      events.push({ minute: uniqueMinute(), type: "YELLOW_CARD", personId: p.id, teamId: home ? m.home : m.away });
+   348→    }
+   349→
+   350→    if (forced?.redCard) {
+   351→      const lineup = forced.redCard.side === "home" ? homeLineup : awayLineup;
+   352→      const p = pick(lineup.filter((x) => x.position !== "GK"));
+   353→      events.push({ minute: forced.redCard.minute, type: "RED_CARD", personId: p.id, teamId: forced.redCard.side === "home" ? m.home : m.away });
+   354→    }
+   355→    if (forced?.yellows) {
+   356→      for (const y of forced.yellows) {
+   357→        const lineup = y.side === "home" ? homeLineup : awayLineup;
+   358→        const p = y.personId
+   359→          ? lineup.find((x) => x.id === y.personId)
+   360→          : pick(lineup.filter((x) => x.position === "DF"));
+   361→        if (!p) continue;
+   362→        if (events.some((e) => e.personId === p.id && (e.type === "RED_CARD" || e.type === "YELLOW_CARD"))) continue;
+   363→        events.push({ minute: uniqueMinute(), type: "YELLOW_CARD", personId: p.id, teamId: y.side === "home" ? m.home : m.away });
+   364→      }
+   365→    }
+   366→
+   367→    events.sort((a, b) => a.minute - b.minute);
+   368→    for (const e of events) {
+   369→      await db.matchEvent.create({ data: { ...e, matchId: m.id } });
+   370→    }
+   371→
+   372→    await completeMatch(m.id, null);
+   373→  };
+   374→
+   375→  // LIVE-матч сегодня (тур 4): счёт в БД, события есть, завершения нет.
+   376→  // Начало — 38 минут назад: лента показывает «на какой минуте» и время старта.
+   377→  const startLive = async (m: SeedMatch, squads: Map<string, { id: string; position: string }[]>, lineupSize: number) => {
+   378→    await db.match.update({ where: { id: m.id }, data: { kickoff: new Date(Date.now() - 38 * 60000) } });
+   379→    const homeSquad = squads.get(m.home)!;
+   380→    const awaySquad = squads.get(m.away)!;
+   381→    const lineup = (squad: { id: string; position: string }[]) => [
+   382→      ...squad.filter((p) => p.position === "GK"),
+   383→      ...squad.filter((p) => p.position !== "GK").slice(0, lineupSize - 1),
+   384→    ];
+   385→    const homeLineup = lineup(homeSquad);
+   386→    const awayLineup = lineup(awaySquad);
+   387→    // запасные хозяев — для демонстрации замены
+   388→    const homeBench = homeSquad.filter((p) => !homeLineup.some((x) => x.id === p.id)).slice(0, 2);
+   389→    await db.lineupEntry.createMany({
+   390→      data: [
+   391→        ...homeLineup.map((p, i) => ({ matchId: m.id, teamId: m.home, personId: p.id, isStarter: true, number: i + 1 })),
+   392→        ...homeBench.map((p, i) => ({ matchId: m.id, teamId: m.home, personId: p.id, isStarter: false, number: 12 + i })),
+   393→        ...awayLineup.map((p, i) => ({ matchId: m.id, teamId: m.away, personId: p.id, isStarter: true, number: i + 1 })),
+   394→      ],
+   395→    });
+   396→    const scorer = pick(homeLineup.filter((p) => p.position !== "GK"));
+   397→    await db.matchEvent.create({
+   398→      data: { matchId: m.id, minute: 23, type: "GOAL", personId: scorer.id, teamId: m.home, assistPersonId: pick(homeLineup.filter((p) => p.id !== scorer.id && p.position !== "GK")).id },
+   399→    });
+   400→    await db.matchEvent.create({
+   401→      data: { matchId: m.id, minute: 41, type: "GOAL", personId: pick(awayLineup.filter((p) => p.position !== "GK") ?? awayLineup).id, teamId: m.away },
+   402→    });
+   403→    // VAR: проверка взятия ворот — гол подтверждён; у гостей гол отменён
+   404→    await db.matchEvent.create({
+   405→      data: { matchId: m.id, minute: 25, type: "VAR_GOAL_CONFIRM", personId: scorer.id, teamId: m.home },
+   406→    });
+   407→    await db.matchEvent.create({
+   408→      data: { matchId: m.id, minute: 31, type: "VAR_GOAL_CANCEL", personId: pick(awayLineup.filter((p) => p.position !== "GK") ?? awayLineup).id, teamId: m.away },
+   409→    });
+   410→    // замена хозяев (30'): уходит полузащитник, выходит запасный
+   411→    const outPlayer = homeLineup.filter((p) => p.position === "MF")[1] ?? homeLineup[5];
+   412→    const inPlayer = homeBench[0];
+   413→    if (outPlayer && inPlayer) {
+   414→      await db.matchEvent.createMany({
+   415→        data: [
+   416→          { matchId: m.id, minute: 30, type: "SUB_OUT", personId: outPlayer.id, teamId: m.home },
+   417→          { matchId: m.id, minute: 30, type: "SUB_IN", personId: inPlayer.id, teamId: m.home },
+   418→        ],
+   419→      });
+   420→    }
+   421→    await db.match.update({ where: { id: m.id }, data: { status: "LIVE", homeScore: 1, awayScore: 1 } });
+   422→  };
+   423→
+   424→  // Лига 1 (F11): туры 1–3 сыграны; в 3-м туре — WO и красная; 4-й тур сегодня (1 LIVE + 3 предстоящих)
+   425→  const himikDF = squadsL1.get(teamsL1[6].id)!.find((p) => p.position === "DF")!;
+   426→  const himikSide = (m: { home: string; away: string }): "home" | "away" | null =>
+   427→    m.home === teamsL1[6].id ? "home" : m.away === teamsL1[6].id ? "away" : null;
+   428→
+   429→  const r1 = matchesL1.filter((m) => m.round === 1);
+   430→  const r2 = matchesL1.filter((m) => m.round === 2);
+   431→  const r3 = matchesL1.filter((m) => m.round === 3);
+   432→  const r4 = matchesL1.filter((m) => m.round === 4);
+   433→
+   434→  const woMatch = r3[0];
+   435→  const redCardMatch = r3[1];
+   436→
+   437→  // ---------- «Эмоции турнира»: гарантированные сигналы ----------
+   438→  // hotTeam — 3 победы подряд (🔥), coldTeam — 3 поражения (❄) + смена тренера.
+   439→  // Не трогаем Химик (сценарий ЖК-накопления) и команды WO-матча.
+   440→  const woTeams = new Set([woMatch.home, woMatch.away]);
+   441→  const signalExcluded = new Set<string>([teamsL1[6].id, ...woTeams]);
+   442→  const hotTeam = teamsL1.find((t) => !signalExcluded.has(t.id))!;
+   443→  const coldTeam = teamsL1.find((t) => !signalExcluded.has(t.id) && t.id !== hotTeam.id)!;
+   444→  const forcedScoreFor = (m: SeedMatch): [number, number] | undefined => {
+   445→    const hotHome = m.home === hotTeam.id;
+   446→    const hotAway = m.away === hotTeam.id;
+   447→    const coldHome = m.home === coldTeam.id;
+   448→    const coldAway = m.away === coldTeam.id;
+   449→    if (hotHome) return [3, 1]; // «горячая» побеждает дома
+   450→    if (hotAway) return [1, 3]; // «горячая» побеждает в гостях
+   451→    if (coldHome) return [0, 3]; // «холодная» проигрывает дома
+   452→    if (coldAway) return [3, 0]; // «холодная» проигрывает в гостях
+   453→    return undefined;
+   454→  };
+   455→
+   456→  for (const m of r1) {
+   457→    const side = himikSide(m);
+   458→    const yellows = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
+   459→    await simulate(m, squadsL1, 11, { ...yellows, score: forcedScoreFor(m) });
+   460→  }
+   461→  for (const m of r2) {
+   462→    const side = himikSide(m);
+   463→    const yellows = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
+   464→    await simulate(m, squadsL1, 11, { ...yellows, score: forcedScoreFor(m) });
+   465→  }
+   466→
+   467→  const woMatch2 = woMatch;
+   468→  for (const m of r3) {
+   469→    if (m.id === woMatch2.id) continue;
+   470→    const side = himikSide(m);
+   471→    const forced = m.id === redCardMatch.id ? { redCard: { side: "away", minute: 74 } } : {};
+   472→    const extraY = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
+   473→    await simulate(m, squadsL1, 11, { ...forced, ...extraY, score: forcedScoreFor(m) });
+   474→  }
+   475→  await assignWalkover(woMatch.id, "HOME", null, "Неявка команды хозяев на матч (сообщение судьи)");
+   476→  await startLive(r4[0], squadsL1, 11);
+   477→
+   478→  // Лига 2 (футзал): туры 1–2 сыграны (в 1-м — срыв WO_BOTH), тур 3 сегодня
+   479→  const r1L2 = matchesL2.filter((m) => m.round === 1);
+   480→  const r2L2 = matchesL2.filter((m) => m.round === 2);
+   481→  const woBoth = r1L2[0];
+   482→  for (const m of r1L2) {
+   483→    if (m.id === woBoth.id) continue;
+   484→    await simulate(m, squadsL2, 6);
+   485→  }
+   486→  for (const m of r2L2) await simulate(m, squadsL2, 6);
+   487→  await assignWalkover(woBoth.id, "BOTH", null, "Обе команды не явились — срыв матча");
+   488→
+   489→  // Лига 3 (8×8): тур 1 сыгран
+   490→  for (const m of matchesL3.filter((x) => x.round === 1)) await simulate(m, squadsL3, 8);
+   491→
+   492→  // Лига 4 (6×6): тур 1 сыгран
+   493→  for (const m of matchesL4.filter((x) => x.round === 1)) await simulate(m, squadsL4, 6);
+   494→
+   495→  // ---------- Трансфер (Epic 3): игрок «Волги» перешёл в «Динамо» после 2-го тура ----------
+   496→  console.log("🔄 Трансфер...");
+   497→  const volgaSquad = squadsL1.get(teamsL1[5].id)!;
+   498→  const transferPlayer = volgaSquad.find((p) => p.position === "FW")!;
+   499→  await db.registration.updateMany({
+   500→    where: { personId: transferPlayer.id, teamId: teamsL1[5].id },
+   501→    data: { endDate: MSK(dayStr(-13), 23) },
+   502→  });
+   503→  await db.registration.create({
+   504→    data: {
+   505→      personId: transferPlayer.id, teamId: teamsL1[4].id, seasonId: season1.id,
+   506→      startDate: MSK(dayStr(-12), 0), number: 99,
+   507→    },
+   508→  });
+   509→
+   510→  // ---------- Сигналы ленты: бан бомбардира и смена тренера ----------
+   511→  console.log("🔥 Сигналы турнира...");
+   512→  // лучший бомбардир «горячей» команды дисквалифицирован решением КДК —
+   513→  // лента покажет у её матчей значок «без бомбардира»
+   514→  const hotGoals = await db.matchEvent.findMany({
+   515→    where: { teamId: hotTeam.id, type: { in: ["GOAL", "PENALTY"] }, match: { status: "COMPLETED" } },
+   516→    select: { personId: true },
+   517→  });
+   518→  const goalCount = new Map<string, number>();
+   519→  for (const e of hotGoals) goalCount.set(e.personId, (goalCount.get(e.personId) ?? 0) + 1);
+   520→  const hotScorerId = [...goalCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+   521→  if (hotScorerId) {
+   522→    await db.suspension.create({
+   523→      data: {
+   524→        personId: hotScorerId, seasonId: season1.id, source: "MANUAL",
+   525→        reason: "Решение КДК: грубая игра в последнем матче (2 матча)",
+   526→        matchesTotal: 2, matchesServed: 0, isActive: true,
+   527→      },
+   528→    });
+   529→  }
+   530→  // в «холодной» команде сменился тренер (5 дней назад) — значок «новый тренер»
+   531→  const coldCoachReg = await db.registration.findFirst({
+   532→    where: { teamId: coldTeam.id, seasonId: season1.id, role: "COACH" },
+   533→  });
+   534→  if (coldCoachReg) {
+   535→    await db.registration.update({
+   536→      where: { id: coldCoachReg.id },
+   537→      data: { endDate: MSK(dayStr(-6), 23), status: "ENDED" },
+   538→    });
+   539→  }
+   540→  const newCoach = await db.person.create({ data: makePersonData("MF") });
+   541→  await db.registration.create({
+   542→    data: {
+   543→      personId: newCoach.id, teamId: coldTeam.id, seasonId: season1.id,
+   544→      startDate: MSK(dayStr(-5), 10), role: "COACH",
+   545→    },
+   546→  });
+   547→
+   548→  // ---------- История личных встреч: прошлогодний сезон ----------
+   549→  // пары сегодняшнего тура уже встречались в сезоне-2025 — вкладка «Личные встречи»
+   550→  console.log("📜 Сезон 2025 (история H2H)...");
+   551→  const season1prev = await db.season.create({
+   552→    data: { leagueId: league1.id, name: "Сезон 2025", startDate: MSK(dayStr(-400), 12), endDate: MSK(dayStr(-120), 12), isCurrent: false },
+   553→  });
+   554→  const stage1prev = await mkStage(season1prev.id);
+   555→  const todayPairs = r4.map((m) => [m.home, m.away] as [string, string]);
+   556→  const h2hScores: [number, number][] = [[2, 1], [0, 3], [1, 1], [2, 0], [1, 2], [3, 1], [0, 0], [2, 2]];
+   557→  let h2hIdx = 0;
+   558→  for (const [home, away] of todayPairs) {
+   559→    for (const swap of [false, true]) {
+   560→      const [h, a] = swap ? [away, home] : [home, away];
+   561→      const [hs, as] = h2hScores[h2hIdx % h2hScores.length];
+   562→      await db.match.create({
+   563→        data: {
+   564→          stageId: stage1prev.id, round: swap ? 2 : 1,
+   565→          homeTeamId: h, awayTeamId: a,
+   566→          stadiumId: stadiums[h2hIdx % stadiums.length].id,
+   567→          kickoff: MSK(dayStr(-400 + h2hIdx * 35), 15),
+   568→          status: "COMPLETED", homeScore: hs, awayScore: as,
+   569→          refereeId: referees[h2hIdx % referees.length].id,
+   570→        },
+   571→      });
+   572→      h2hIdx++;
+   573→    }
+   574→  }
+   575→
+   576→  // ---------- Оценки судей (Milestone 5) ----------
+   577→  console.log("⭐ Оценки судей...");
+   578→  const completed1 = await db.match.findMany({
+   579→    where: { status: "COMPLETED", stage: { seasonId: season1.id } },
+   580→    take: 8,
+   581→  });
+   582→  for (const m of completed1) {
+   583→    if (rng() < 0.7 && m.refereeId) {
+   584→      await db.refereeRating.create({
+   585→        data: {
+   586→          matchId: m.id, refereeId: m.refereeId, authorUserId: clubUser.id,
+   587→          rating: ri(3, 5), comment: rng() < 0.4 ? "Судейство на хорошем уровне" : null,
+   588→        },
+   589→      });
+   590→    }
+   591→    if (rng() < 0.4 && m.refereeId) {
+   592→      await db.refereeRating.create({
+   593→        data: { matchId: m.id, refereeId: m.refereeId, authorUserId: leagueAdmin.id, rating: ri(3, 5) },
+   594→      });
+   595→    }
+   596→  }
+   597→
+   598→  // ---------- Дубликат профиля (демо Merge Persons, Epic 4) ----------
+   599→  console.log("🧹 Дубликат для Merge...");
+   600→  const victimRef = squadsL1.get(teamsL1[0].id)![2];
+   601→  const victim = (await db.person.findUnique({ where: { id: victimRef.id } }))!;
+   602→  const dup = await db.person.create({
+   603→    data: { firstName: victim.firstName.slice(0, 1) + ".", lastName: victim.lastName, position: victim.position },
+   604→  });
+   605→  await db.registration.create({
+   606→    data: { personId: dup.id, teamId: teamsL1[0].id, seasonId: season1.id, startDate: seasonStart, number: 88 },
+   607→  });
+   608→
+   609→  // ---------- Баннеры (Milestone 4, слоты под баннеры) ----------
+   610→  console.log("📢 Баннеры...");
+   611→  await db.banner.createMany({
+   612→    data: [
+   613→      {
+   614→        placement: "TOP", title: "СпортСити — экипировка для вашего клуба",
+   615→        text: "Футбольная форма, бутсы и вратарские перчатки со скидкой 15% по промокоду SCORES21",
+   616→        linkUrl: "https://sportcity.example", priority: 1,
+   617→      },
+   618→      {
+   619→        placement: "RIGHT_TOP", title: "Кубок Чувашии 2026",
+   620→        text: "Приём заявок команд открыт до 15 сентября",
+   621→        linkUrl: "https://ff21.example/kubok", priority: 1,
+   622→      },
+   623→      {
+   624→        placement: "RIGHT_BOTTOM", title: "Судейский семинар ФФЧ",
+   625→        text: "14 сентября, старт в 10:00 — аудитория помощи начинающим арбитрам",
+   626→        linkUrl: "https://ff21.example/seminar", priority: 2,
+   627→      },
+   628→    ],
+   629→  });
+   630→
+   631→  const counts = {
+   632→    persons: await db.person.count(),
+   633→    teams: await db.team.count(),
+   634→    matches: await db.match.count(),
+   635→    events: await db.matchEvent.count(),
+   636→    suspensions: await db.suspension.count(),
+   637→    ratings: await db.refereeRating.count(),
+   638→    banners: await db.banner.count(),
+   639→  };
+   640→  console.log("✅ Seed завершён:", counts);
+   641→  await db.$disconnect();
+   642→}
+   643→
+   644→main().catch(async (e) => {
+   645→  console.error(e);
+   646→  await db.$disconnect();
+   647→  process.exit(1);
+   648→});
+   649→

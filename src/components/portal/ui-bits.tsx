@@ -5,7 +5,7 @@
 
 import { cn } from "@/lib/utils";
 import { Flame, Loader2, SearchX, Snowflake } from "lucide-react";
-import { STREAK_LABELS } from "@/lib/labels";
+import { STREAK_LABELS, STREAK_MIN } from "@/lib/labels";
 
 /** Отображаемый счёт матча с учётом регламентного WO-счёта (COALESCE-логика PRD Epic 2) */
 export function matchScore(m: {
@@ -58,7 +58,7 @@ export function FormBadges({ form }: { form: string[] }) {
       {form.map((f, i) => {
         const v = map[f] ?? { label: f, cls: "bg-s2 text-ink2", title: f };
         return (
-          <span key={i} title={v.title} className={cn("inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold", v.cls)}>
+          <span key={i} title={v.title} className={cn("inline-flex h-[22px] w-[22px] items-center justify-center rounded-full text-[11px] font-bold", v.cls)}>
             {v.label}
           </span>
         );
@@ -67,18 +67,19 @@ export function FormBadges({ form }: { form: string[] }) {
   );
 }
 
-/** Серия команды: 🔥 победы / ❄ поражения (порог 3+) — «эмоция турнира» */
+/** Серия команды: огонь — победы, снежинка — поражения.
+ *  Порог STREAK_MIN (5+): настоящая серия, а не случайность. */
 export function StreakMark({ streak, compact, className }: { streak: { code: string; count: number } | null | undefined; compact?: boolean; className?: string }) {
   if (!streak) return null;
-  const hot = (streak.code === "W" || streak.code === "w") && streak.count >= 3;
-  const cold = (streak.code === "L" || streak.code === "T") && streak.count >= 3;
+  const hot = (streak.code === "W" || streak.code === "w") && streak.count >= STREAK_MIN;
+  const cold = (streak.code === "L" || streak.code === "T") && streak.count >= STREAK_MIN;
   if (!hot && !cold) return null;
   const word = STREAK_LABELS[streak.code] ?? "матчей";
   const title = hot ? `Команда на огне: ${streak.count} ${word} подряд` : `Команда в кризисе: ${streak.count} ${word} подряд`;
   return (
     <span
       title={title}
-      className={cn("inline-flex items-center gap-1 text-[11px] font-bold", hot ? "streak-hot" : "streak-cold", className)}
+      className={cn("inline-flex items-center gap-1 text-xs font-bold", hot ? "streak-hot" : "streak-cold", className)}
     >
       {hot ? <Flame className="h-3.5 w-3.5 streak-hot-glow" /> : <Snowflake className="h-3.5 w-3.5" />}
       {!compact && <span>{streak.count}</span>}

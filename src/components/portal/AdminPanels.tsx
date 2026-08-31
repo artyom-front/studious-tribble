@@ -132,7 +132,7 @@ export function KdcPanel({ seasonId, bump }: { seasonId: string; bump: () => voi
                 )}
                 <button
                   onClick={() => update(s.id, { isLifetime: !s.isLifetime, matchesTotal: s.isLifetime ? 1 : 0 })}
-                  className="rounded p-1 text-[10px] text-red-500 hover:bg-red-50"
+                  className="rounded p-1 text-xs text-red-500 hover:bg-red-50"
                   title={s.isLifetime ? "Снять пожизненную" : "Сделать пожизненной"}
                 >
                   <Ban className="h-4 w-4" />
@@ -429,7 +429,7 @@ export function AuditPanel() {
               <span className="w-40 truncate font-mono text-xs text-zinc-400" title={l.entityId}>{l.entityId.slice(0, 14)}…</span>
               <span className="ml-auto text-xs text-zinc-500">{l.userEmail ?? "система"}</span>
               {expanded === l.id && (
-                <div className="w-full space-y-1 rounded-lg bg-zinc-900 p-3 font-mono text-[11px] text-zinc-300">
+                <div className="w-full space-y-1 rounded-lg bg-zinc-900 p-3 font-mono text-xs text-zinc-300">
                   <p><span className="text-red-400">old:</span> {l.oldValue ? JSON.stringify(l.oldValue, null, 1).slice(0, 500) : "—"}</p>
                   <p><span className="text-emerald-400">new:</span> {l.newValue ? JSON.stringify(l.newValue, null, 1).slice(0, 500) : "—"}</p>
                 </div>

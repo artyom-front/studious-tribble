@@ -170,7 +170,7 @@ export function MatchesCrudPanel({ bump, version, overview, onOpenProtocol }: { 
         ))}
       </div>
       {matches.length > 0 && (
-        <p className="text-[11px] text-zinc-400">
+        <p className="text-xs text-zinc-400">
           Всего {matches.length} · статусы: {Object.values(STATUS_LABELS).join(", ")} · переносить завершённые матчи нельзя (сначала Reset в «Протоколах»)
         </p>
       )}

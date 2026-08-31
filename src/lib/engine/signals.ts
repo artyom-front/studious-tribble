@@ -3,6 +3,7 @@
 // без новых сущностей: стрики, важные матчи, пропуски бомбардира, смена тренера.
 
 import { db } from "@/lib/db";
+import { STREAK_MIN } from "@/lib/labels";
 import type { StandingRow } from "./standings";
 
 // ---------- Типы ----------
@@ -116,7 +117,9 @@ export function computeStreak(
     if (results[i] !== last) break;
     count++;
   }
-  return count >= 2 ? { code: last, count } : { code: last, count };
+  // возвращаем серию любой длины (для превью полезна и короткая),
+  // а «эмоцией» (🔥/❄) она становится при STREAK_MIN+ — порог применяется в UI
+  return { code: last, count };
 }
 
 // ---------- Контекст сезона ----------
@@ -264,12 +267,12 @@ function plural(n: number, one: string, few: string, many: string): string {
 
 export { plural };
 
-/** Серия «горячая» (победы) — для 🔥, порог 3+ */
+/** Серия «горячая» (победы) — огонь в ленте, порог STREAK_MIN (5+) */
 export function isHotStreak(s: Streak | null): boolean {
-  return !!s && (s.code === "W" || s.code === "w") && s.count >= 3;
+  return !!s && (s.code === "W" || s.code === "w") && s.count >= STREAK_MIN;
 }
 
-/** Серия «кризис» (поражения/техпоражения) — для ❄, порог 3+ */
+/** Серия «кризис» (поражения/техпоражения) — снежинка, порог STREAK_MIN (5+) */
 export function isColdStreak(s: Streak | null): boolean {
-  return !!s && (s.code === "L" || s.code === "T") && s.count >= 3;
+  return !!s && (s.code === "L" || s.code === "T") && s.count >= STREAK_MIN;
 }

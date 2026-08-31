@@ -54,7 +54,7 @@ export default function CalendarView({ seasonId, version, onOpenMatch }: { seaso
       {[...rounds.entries()].map(([round, list]) => (
         <div key={round} className="overflow-hidden rounded-xl border border-sline bg-s1">
           <div className="flex items-center gap-2 border-b border-sline/60 bg-s2/50 px-4 py-2.5">
-            <span className="rounded-md bg-gold px-2 py-0.5 text-[11px] font-bold text-goldink">{round > 0 ? `${round}-й тур` : "Без тура"}</span>
+            <span className="rounded-md bg-gold px-2 py-0.5 text-xs font-bold text-goldink">{round > 0 ? `${round}-й тур` : "Без тура"}</span>
             <span className="text-xs text-ink3">{fmtDate(list[0].kickoff, false)}</span>
           </div>
           <div className="divide-y divide-sline/40">
@@ -73,7 +73,7 @@ export default function CalendarView({ seasonId, version, onOpenMatch }: { seaso
                     <span className="truncate text-ink2">{m.awayTeam.name}</span>
                   </div>
                   <div className="flex w-32 shrink-0 items-center justify-end gap-1.5">
-                    {m.status === "WALKOVER" && <span className="rounded bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">WO</span>}
+                    {m.status === "WALKOVER" && <span className="rounded bg-amber-400/15 px-1.5 py-0.5 text-xs font-bold text-amber-400">WO</span>}
                     <StatusBadge status={m.status} />
                   </div>
                   <div className="hidden w-40 shrink-0 items-center gap-1 text-xs text-ink3 md:flex">

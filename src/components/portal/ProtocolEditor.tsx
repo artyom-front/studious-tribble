@@ -250,7 +250,7 @@ export default function ProtocolEditor({ matchId, user, onBack, bump }: Props) {
             <p className="flex-1 text-right font-semibold">{m.homeTeam.name}</p>
             <div className="text-center">
               <div className="font-mono text-3xl font-bold"><ScoreBox score={m.homeScore !== null ? { home: m.homeScore, away: m.awayScore ?? 0 } : null} /></div>
-              <p className="text-[11px] text-zinc-400">{m.status === "LIVE" ? "идёт ввод протокола" : STATUS_SAFE(m.status)}</p>
+              <p className="text-xs text-zinc-400">{m.status === "LIVE" ? "идёт ввод протокола" : STATUS_SAFE(m.status)}</p>
             </div>
             <p className="flex-1 font-semibold">{m.awayTeam.name}</p>
           </div>
@@ -351,9 +351,9 @@ export default function ProtocolEditor({ matchId, user, onBack, bump }: Props) {
                           </span>
                           <span className="w-7 text-center font-mono text-xs text-zinc-400">{p.number ?? "—"}</span>
                           <span className="flex-1 truncate font-medium">{p.name}</span>
-                          {p.position && <span className="text-[10px] text-zinc-400">{p.position}</span>}
+                          {p.position && <span className="text-xs text-zinc-400">{p.position}</span>}
                           {suspended && (
-                            <span className="flex items-center gap-1 text-[10px] font-medium text-red-600">
+                            <span className="flex items-center gap-1 text-xs font-medium text-red-600">
                               <Ban className="h-3 w-3" />
                               {p.suspension.isLifetime ? "пожизненно" : `бан ${p.suspension.matchesRemaining} матч.`}
                             </span>

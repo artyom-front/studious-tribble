@@ -81,7 +81,7 @@ export default function AdminDashboard({ data, version, onOpenMatch, onNavigate,
               <span className="font-mono text-2xl font-black text-zinc-900 tabular">{kpi.value}</span>
             </div>
             <p className="mt-2 text-xs font-bold text-zinc-700">{kpi.label}</p>
-            <p className="text-[11px] text-zinc-400">{kpi.hint}</p>
+            <p className="text-xs text-zinc-400">{kpi.hint}</p>
           </div>
         ))}
       </div>

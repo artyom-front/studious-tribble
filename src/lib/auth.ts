@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { HttpError } from "@/lib/http";
 
+// Секрет подписи сессий: в проде ОБЯЗАТЕЛЬНО задаётся AUTH_SECRET (openssl rand -hex 32)
 const SECRET = process.env.AUTH_SECRET || "football-chuvashia-demo-secret-2026";
 const COOKIE = "sid";
 const TTL_SECONDS = 60 * 60 * 24 * 7; // 7 дней
@@ -68,6 +69,9 @@ export async function setSessionCookie(userId: string) {
   jar.set(COOKIE, signToken({ uid: userId }), {
     httpOnly: true,
     sameSite: "lax",
+    // в проде (HTTPS за nginx) кука помечается Secure; DEV_INSECURE_COOKIE=1 —
+    // аварийный тумблер для локального HTTP-тестинга прод-сборки
+    secure: process.env.NODE_ENV === "production" && process.env.DEV_INSECURE_COOKIE !== "1",
     path: "/",
     maxAge: TTL_SECONDS,
   });

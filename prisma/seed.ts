@@ -1,6 +1,7 @@
 // Seed: демо-данные портала «Футбол Чувашии».
 // Использует боевые движки (schedule, lifecycle, discipline) — dogfooding логики.
-// Даты — динамические относительно «сегодня» (МСК): туры 1–3 сыграны, 4-й — сегодня (вкл. LIVE-матч).
+// Даты — динамические относительно «сегодня» (МСК): Премьер-лига — туры 1–5 сыграны,
+// 6-й сегодня (вкл. LIVE «за 1-е место»), 7-й — через неделю.
 
 import { PrismaClient } from "@prisma/client";
 import { scryptSync, randomBytes } from "crypto";
@@ -224,7 +225,7 @@ async function main() {
   const slots3 = generateRoundRobin(teamsL3.map((t) => t.id), false); // 5 туров
   const slots4 = generateRoundRobin(teamsL4.map((t) => t.id), false); // 5 туров
 
-  const roundDatesL1 = [dayStr(-21), dayStr(-14), dayStr(-7), today, dayStr(7), dayStr(14), dayStr(21)];
+  const roundDatesL1 = [dayStr(-28), dayStr(-25), dayStr(-21), dayStr(-18), dayStr(-14), today, dayStr(7)];
   const roundDatesL2 = [dayStr(-14), dayStr(-7), today, dayStr(7), dayStr(14)];
   const roundDatesL3 = [dayStr(-7), today, dayStr(7), dayStr(14), dayStr(21)];
   const roundDatesL4 = [dayStr(-3), dayStr(1), dayStr(8), dayStr(15), dayStr(22)];
@@ -421,7 +422,8 @@ async function main() {
     await db.match.update({ where: { id: m.id }, data: { status: "LIVE", homeScore: 1, awayScore: 1 } });
   };
 
-  // Лига 1 (F11): туры 1–3 сыграны; в 3-м туре — WO и красная; 4-й тур сегодня (1 LIVE + 3 предстоящих)
+  // Лига 1 (F11): туры 1–5 сыграны; в 3-м туре — WO, в 5-м — красная (бан активен);
+  // 6-й тур сегодня: 1 LIVE «за 1-е место» + 3 предстоящих, 7-й — через неделю
   const himikDF = squadsL1.get(teamsL1[6].id)!.find((p) => p.position === "DF")!;
   const himikSide = (m: { home: string; away: string }): "home" | "away" | null =>
     m.home === teamsL1[6].id ? "home" : m.away === teamsL1[6].id ? "away" : null;
@@ -430,52 +432,72 @@ async function main() {
   const r2 = matchesL1.filter((m) => m.round === 2);
   const r3 = matchesL1.filter((m) => m.round === 3);
   const r4 = matchesL1.filter((m) => m.round === 4);
+  const r5 = matchesL1.filter((m) => m.round === 5);
+  const r6 = matchesL1.filter((m) => m.round === 6);
 
-  const woMatch = r3[0];
-  const redCardMatch = r3[1];
+  const woMatch = r3[1]; // Урняк-КУ vs Энергия-НБ — неявка хозяев
 
   // ---------- «Эмоции турнира»: гарантированные сигналы ----------
-  // hotTeam — 3 победы подряд (🔥), coldTeam — 3 поражения (❄) + смена тренера.
-  // Не трогаем Химик (сценарий ЖК-накопления) и команды WO-матча.
+  // hotTeam — Волга и silverTeam — Атал: по 5 побед (🔥), в 6-м туре встречаются
+  // за 1-е место (обе по 15 очков) — это LIVE-матч дня. coldTeam — Сокол:
+  // 5 поражений (❄) + смена тренера. Не трогаем Химик (сценарий ЖК) и команды WO-матча.
   const woTeams = new Set([woMatch.home, woMatch.away]);
   const signalExcluded = new Set<string>([teamsL1[6].id, ...woTeams]);
-  const hotTeam = teamsL1.find((t) => !signalExcluded.has(t.id))!;
-  const coldTeam = teamsL1.find((t) => !signalExcluded.has(t.id) && t.id !== hotTeam.id)!;
-  const forcedScoreFor = (m: SeedMatch): [number, number] | undefined => {
-    const hotHome = m.home === hotTeam.id;
-    const hotAway = m.away === hotTeam.id;
-    const coldHome = m.home === coldTeam.id;
-    const coldAway = m.away === coldTeam.id;
-    if (hotHome) return [3, 1]; // «горячая» побеждает дома
-    if (hotAway) return [1, 3]; // «горячая» побеждает в гостях
-    if (coldHome) return [0, 3]; // «холодная» проигрывает дома
-    if (coldAway) return [3, 0]; // «холодная» проигрывает в гостях
+  const hotTeam = teamsL1[5]; // Волга-ЧБ
+  const silverTeam = teamsL1[7]; // Атал-ШМ
+  const coldTeam = teamsL1.find((t) => !signalExcluded.has(t.id) && t.id !== hotTeam.id && t.id !== silverTeam.id)!; // Сокол-АЛ
+  const forcedScoreFor = (m: SeedMatch, round: number): [number, number] | undefined => {
+    const side = (id: string): "home" | "away" | null => (m.home === id ? "home" : m.away === id ? "away" : null);
+    const hotSide = side(hotTeam.id);
+    const silverSide = side(silverTeam.id);
+    const coldSide = side(coldTeam.id);
+    // «горячая» побеждает; в 4-м туре — разгром 10:1 (инсайт превью «забивала 10+»)
+    if (hotSide) {
+      if (round === 4) return hotSide === "home" ? [10, 1] : [1, 10];
+      return hotSide === "home" ? [3, 1] : [1, 3];
+    }
+    if (silverSide) return silverSide === "home" ? [2, 0] : [0, 2];
+    // «холодная» проигрывает; в 5-м туре — 0:10 (инсайт «пропускала 10+»)
+    if (coldSide) {
+      if (round === 5) return coldSide === "home" ? [0, 10] : [10, 0];
+      return coldSide === "home" ? [0, 3] : [3, 0];
+    }
     return undefined;
   };
 
   for (const m of r1) {
-    const side = himikSide(m);
-    const yellows = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
-    await simulate(m, squadsL1, 11, { ...yellows, score: forcedScoreFor(m) });
+    await simulate(m, squadsL1, 11, { score: forcedScoreFor(m, 1) });
   }
   for (const m of r2) {
-    const side = himikSide(m);
-    const yellows = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
-    await simulate(m, squadsL1, 11, { ...yellows, score: forcedScoreFor(m) });
+    await simulate(m, squadsL1, 11, { score: forcedScoreFor(m, 2) });
   }
 
-  const woMatch2 = woMatch;
+  // туры 3–5: WO в 3-м, красная карточка в 5-м (бан не отсижен — активен);
+  // ЖК-накопление Химика — по одной в турах 3–5: 3-я ЖК в последнем сыгранном
+  // туре → бан активен и не «отсиживается» (игрок не играет под баном)
+  const redCardMatch = r5.find((m) => !himikSide(m) && ![hotTeam.id, silverTeam.id, coldTeam.id].includes(m.home) && ![hotTeam.id, silverTeam.id, coldTeam.id].includes(m.away))!;
   for (const m of r3) {
-    if (m.id === woMatch2.id) continue;
+    if (m.id === woMatch.id) continue;
     const side = himikSide(m);
-    const forced = m.id === redCardMatch.id ? { redCard: { side: "away", minute: 74 } } : {};
     const extraY = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
-    await simulate(m, squadsL1, 11, { ...forced, ...extraY, score: forcedScoreFor(m) });
+    await simulate(m, squadsL1, 11, { ...extraY, score: forcedScoreFor(m, 3) });
+  }
+  for (const m of r4) {
+    const side = himikSide(m);
+    const extraY = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
+    await simulate(m, squadsL1, 11, { ...extraY, score: forcedScoreFor(m, 4) });
+  }
+  for (const m of r5) {
+    const side = himikSide(m);
+    const extraY = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
+    const forced = m.id === redCardMatch.id ? { redCard: { side: "away", minute: 74 } } : {};
+    await simulate(m, squadsL1, 11, { ...forced, ...extraY, score: forcedScoreFor(m, 5) });
   }
   await assignWalkover(woMatch.id, "HOME", null, "Неявка команды хозяев на матч (сообщение судьи)");
-  await startLive(r4[0], squadsL1, 11);
+  // LIVE «за 1-е место»: Волга и Атал с 15 очками встречаются в 6-м туре
+  await startLive(r6[0], squadsL1, 11);
 
-  // Лига 2 (футзал): туры 1–2 сыграны (в 1-м — срыв WO_BOTH), тур 3 сегодня
+  // Лига 2 (футзал): туры 1–2 сыграны (в 1-м — срыв WO_BOTH, во 2-м — разгром 11:2), тур 3 сегодня
   const r1L2 = matchesL2.filter((m) => m.round === 1);
   const r2L2 = matchesL2.filter((m) => m.round === 2);
   const woBoth = r1L2[0];
@@ -483,7 +505,12 @@ async function main() {
     if (m.id === woBoth.id) continue;
     await simulate(m, squadsL2, 6);
   }
-  for (const m of r2L2) await simulate(m, squadsL2, 6);
+  let routIdx = 0;
+  for (const m of r2L2) {
+    // один матч — 11:2: инсайт «забивала 10+ в одном матче» для футзала
+    await simulate(m, squadsL2, 6, routIdx === 1 ? { score: [11, 2] } : undefined);
+    routIdx++;
+  }
   await assignWalkover(woBoth.id, "BOTH", null, "Обе команды не явились — срыв матча");
 
   // Лига 3 (8×8): тур 1 сыгран
@@ -492,10 +519,11 @@ async function main() {
   // Лига 4 (6×6): тур 1 сыгран
   for (const m of matchesL4.filter((x) => x.round === 1)) await simulate(m, squadsL4, 6);
 
-  // ---------- Трансфер (Epic 3): игрок «Волги» перешёл в «Динамо» после 2-го тура ----------
+  // ---------- Трансфер (Epic 3): полузащитник «Волги» перешёл в «Динамо» после 5-го тура ----------
+  // (не FW: бомбардир должен оставаться в «Волге» — иначе сюжет «без бомбардира» теряет смысл)
   console.log("🔄 Трансфер...");
   const volgaSquad = squadsL1.get(teamsL1[5].id)!;
-  const transferPlayer = volgaSquad.find((p) => p.position === "FW")!;
+  const transferPlayer = volgaSquad.find((p) => p.position === "MF")!;
   await db.registration.updateMany({
     where: { personId: transferPlayer.id, teamId: teamsL1[5].id },
     data: { endDate: MSK(dayStr(-13), 23) },
@@ -515,8 +543,12 @@ async function main() {
     where: { teamId: hotTeam.id, type: { in: ["GOAL", "PENALTY"] }, match: { status: "COMPLETED" } },
     select: { personId: true },
   });
+  // бомбардир должен играть за «Волгу» сейчас: ушедший в «Динамо» не подходит
   const goalCount = new Map<string, number>();
-  for (const e of hotGoals) goalCount.set(e.personId, (goalCount.get(e.personId) ?? 0) + 1);
+  for (const e of hotGoals) {
+    if (e.personId === transferPlayer.id) continue;
+    goalCount.set(e.personId, (goalCount.get(e.personId) ?? 0) + 1);
+  }
   const hotScorerId = [...goalCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   if (hotScorerId) {
     await db.suspension.create({
@@ -552,7 +584,7 @@ async function main() {
     data: { leagueId: league1.id, name: "Сезон 2025", startDate: MSK(dayStr(-400), 12), endDate: MSK(dayStr(-120), 12), isCurrent: false },
   });
   const stage1prev = await mkStage(season1prev.id);
-  const todayPairs = r4.map((m) => [m.home, m.away] as [string, string]);
+  const todayPairs = r6.map((m) => [m.home, m.away] as [string, string]);
   const h2hScores: [number, number][] = [[2, 1], [0, 3], [1, 1], [2, 0], [1, 2], [3, 1], [0, 0], [2, 2]];
   let h2hIdx = 0;
   for (const [home, away] of todayPairs) {

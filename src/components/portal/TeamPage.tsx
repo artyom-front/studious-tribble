@@ -98,7 +98,7 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
             </p>
             {top?.topScorer && (
               <button
-                className={cn("mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold hover:text-gold", top.topScorer.out ? "text-live" : "text-ink2")}
+                className={cn("mt-1.5 flex items-center gap-1.5 text-xs font-semibold hover:text-gold", top.topScorer.out ? "text-live" : "text-ink2")}
                 onClick={() => navigate(`/player/${top.topScorer!.personId}`)}
                 title={top.topScorer.out ? "Лучший бомбардир дисквалифицирован — не сыграет" : "Лучший бомбардир команды в сезоне"}
               >
@@ -157,7 +157,7 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
                         <Avatar name={c.name} id={c.id} size="xs" />
                         {c.name}
                         {isNew && (
-                          <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">новый тренер</span>
+                          <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 text-xs font-bold text-amber-300">новый тренер</span>
                         )}
                       </button>
                     );
@@ -166,7 +166,7 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
                 </div>
               )}
               {current.coaches.some((c) => c.endDate) && (
-                <p className="mb-3 px-1 text-[10px] text-ink3">
+                <p className="mb-3 px-1 text-xs text-ink3">
                   Ранее командой руководили: {current.coaches.filter((c) => c.endDate).map((c) => c.name).join(", ")}
                 </p>
               )}
@@ -176,7 +176,7 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
                   if (group.length === 0) return null;
                   return (
                     <div key={pos.id}>
-                      <p className="px-1 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-ink3">{pos.title}</p>
+                      <p className="px-1 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-ink3">{pos.title}</p>
                       {group.map((p) => (
                         <button
                           key={p.id}
@@ -186,7 +186,7 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
                           <span className="w-7 shrink-0 text-center font-mono text-xs text-ink3">{p.number ?? "—"}</span>
                           <Avatar name={p.name} id={p.id} size="xs" />
                           <span className="min-w-0 flex-1 truncate text-ink2">{p.name}</span>
-                          {p.endDate && <span className="text-[10px] text-amber-400">отзаявлен</span>}
+                          {p.endDate && <span className="text-xs text-amber-400">отзаявлен</span>}
                         </button>
                       ))}
                     </div>
@@ -194,7 +194,7 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
                 })}
                 {current.players.filter((p) => !p.position).length > 0 && (
                   <div>
-                    <p className="px-1 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-ink3">Без позиции</p>
+                    <p className="px-1 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-ink3">Без позиции</p>
                     {current.players.filter((p) => !p.position).map((p) => (
                       <button
                         key={p.id}
@@ -204,7 +204,7 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
                         <span className="w-7 shrink-0 text-center font-mono text-xs text-ink3">{p.number ?? "—"}</span>
                         <Avatar name={p.name} id={p.id} size="xs" />
                         <span className="min-w-0 flex-1 truncate text-ink2">{p.name}</span>
-                        {p.endDate && <span className="text-[10px] text-amber-400">отзаявлен</span>}
+                        {p.endDate && <span className="text-xs text-amber-400">отзаявлен</span>}
                       </button>
                     ))}
                   </div>
@@ -224,7 +224,7 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
                   key={id}
                   onClick={() => setMatchFilter(id)}
                   className={cn(
-                    "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    "rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
                     matchFilter === id ? "bg-gold text-goldink" : "bg-s2 text-ink2 hover:text-ink"
                   )}
                 >
@@ -251,14 +251,14 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
                 >
                   <span
                     className={cn(
-                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-bold",
+                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-bold",
                       res === "W" ? "bg-emerald-500 text-white" : res === "L" ? "bg-live text-white" : res === "D" ? "bg-ink3 text-s0" : "bg-s2 text-ink3"
                     )}
                     title={res === "W" ? "Победа" : res === "L" ? "Поражение" : res === "D" ? "Ничья" : "Не сыгран"}
                   >
                     {res ?? "·"}
                   </span>
-                  <span className="w-16 shrink-0 text-[11px] text-ink3">
+                  <span className="w-16 shrink-0 text-xs text-ink3">
                     {time.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", timeZone: "Europe/Moscow" })}
                   </span>
                   <Crest name={rival.name} id={rival.id} size="xs" />

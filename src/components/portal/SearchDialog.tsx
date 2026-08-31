@@ -94,7 +94,7 @@ export default function SearchDialog() {
               placeholder="Команда, игрок, судья, лига, стадион…"
               className="flex-1 text-base"
             />
-            <kbd className="hidden shrink-0 rounded border border-sline bg-s2 px-1.5 py-0.5 text-[10px] font-semibold text-ink3 sm:block">Esc</kbd>
+            <kbd className="hidden shrink-0 rounded border border-sline bg-s2 px-1.5 py-0.5 text-xs font-semibold text-ink3 sm:block">Esc</kbd>
           </div>
           <CommandList className="max-h-[55vh] scrollbar-s21">
             {q.trim().length >= 2 && !loading && total === 0 && <CommandEmpty>Ничего не найдено</CommandEmpty>}
@@ -146,7 +146,7 @@ export default function SearchDialog() {
               </CommandGroup>
             )}
             {total > 0 && (
-              <p className="flex items-center justify-center gap-1 border-t border-sline py-2 text-[11px] text-ink3">
+              <p className="flex items-center justify-center gap-1 border-t border-sline py-2 text-xs text-ink3">
                 <CornerDownLeft className="h-3 w-3" /> выбрать · перейти в профиль
               </p>
             )}

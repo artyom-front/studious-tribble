@@ -28,7 +28,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
     <div className="space-y-1.5">
       <Label className="text-xs font-semibold text-zinc-600">{label}</Label>
       {children}
-      {hint && <p className="text-[11px] text-zinc-400">{hint}</p>}
+      {hint && <p className="text-xs text-zinc-400">{hint}</p>}
     </div>
   );
 }

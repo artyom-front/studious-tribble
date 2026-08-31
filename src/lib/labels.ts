@@ -28,6 +28,17 @@ export const EVENT_LABELS: Record<string, string> = {
   VAR_GOAL_CONFIRM: "VAR: гол подтверждён",
   VAR_GOAL_CANCEL: "VAR: гол отменён",
   VAR_PENALTY: "VAR: назначен пенальти",
+}
+
+/** Короткие подписи для хронологии: только там, где иконка сама по себе
+ *  не передаёт деталей (пенальти/автогол/вердикт VAR).
+ *  Гол, ЖК, КК и замены подписей не имеют — иконка исчерпывающа. */
+export const EVENT_SHORT_LABELS: Record<string, string> = {
+  PENALTY: "с пенальти",
+  OWN_GOAL: "автогол",
+  VAR_GOAL_CONFIRM: "гол подтверждён",
+  VAR_GOAL_CANCEL: "гол отменён",
+  VAR_PENALTY: "пенальти назначен",
 };
 
 export const SOURCE_LABELS: Record<string, string> = {
@@ -43,6 +54,10 @@ export const STATUS_LABELS: Record<string, string> = {
   WALKOVER: "Тех. поражение",
   POSTPONED: "Перенесён",
 };
+
+/** Порог серии: показываем только «настоящие» стрики — 5+ матчей подряд.
+ *  Короткая серия (2–4 матча) — шум, а не сигнал для зрителя. */
+export const STREAK_MIN = 5;
 
 /** Серии команд для сигналов ленты (код → читаемый текст) */
 export const STREAK_LABELS: Record<string, string> = {

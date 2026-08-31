@@ -147,7 +147,7 @@ export default function Portal() {
                 {BRAND.wordmark}
                 <span className="ml-1 text-gold">{BRAND.mark}</span>
               </span>
-              <span className="mt-0.5 hidden text-[10px] font-medium text-ink3 sm:block">{BRAND.tagline}</span>
+              <span className="mt-0.5 hidden text-xs font-medium text-ink3 sm:block">{BRAND.tagline}</span>
             </span>
           </button>
 
@@ -158,7 +158,7 @@ export default function Portal() {
           >
             <Search className="h-4 w-4 shrink-0" />
             <span className="flex-1 truncate text-left">Поиск: команды, игроки, судьи…</span>
-            <kbd className="shrink-0 rounded border border-sline bg-s2 px-1.5 py-0.5 font-mono text-[10px]">/</kbd>
+            <kbd className="shrink-0 rounded border border-sline bg-s2 px-1.5 py-0.5 font-mono text-xs">/</kbd>
           </button>
 
           <div className="ml-auto flex items-center gap-2">
@@ -173,7 +173,7 @@ export default function Portal() {
               <>
                 <div className="hidden text-right sm:block">
                   <p className="max-w-[160px] truncate text-xs font-semibold leading-tight text-ink">{user.personName ?? user.email}</p>
-                  <p className="text-[10px] text-ink3">
+                  <p className="text-xs text-ink3">
                     {user.role === "SUPER_ADMIN" ? "Супер-админ" : user.role === "LEAGUE_ADMIN" ? "Админ лиги" : user.role === "REFEREE" ? "Судья" : user.role === "CLUB_ADMIN" ? "Админ клуба" : "Игрок"}
                   </p>
                 </div>
@@ -236,7 +236,7 @@ export default function Portal() {
               <p className="text-sm font-bold">{topBanner.title}</p>
               {topBanner.text && <p className="text-xs text-ink2">{topBanner.text}</p>}
             </div>
-            <span className="rounded-md bg-gold px-2.5 py-1 text-[10px] font-bold text-goldink">Реклама</span>
+            <span className="rounded-md bg-gold px-2.5 py-1 text-xs font-bold text-goldink">Реклама</span>
           </a>
         </div>
       )}

@@ -120,14 +120,14 @@ export default function RightRail({ overview, banners, version }: Props) {
             className="flex w-full items-center gap-2.5 border-b border-sline/40 px-3 py-2 text-left hover:bg-s2/60"
           >
             <span className={cn(
-              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+              "flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
               i === 0 ? "bg-gold text-goldink" : "bg-s2 text-ink2"
             )}>
               {i + 1}
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-xs font-semibold text-ink">{p.name}</span>
-              <span className="block truncate text-[10px] text-ink3">{p.teamName}</span>
+              <span className="block truncate text-xs text-ink3">{p.teamName}</span>
             </span>
             <span className="font-mono text-sm font-bold text-gold">{v}</span>
           </button>
@@ -135,7 +135,7 @@ export default function RightRail({ overview, banners, version }: Props) {
         {selectedLeague && (
           <button
             onClick={() => navigate(`/league/${selectedLeague.id}/scorers`)}
-            className="w-full py-2 text-center text-[11px] font-semibold text-gold hover:text-gold/80"
+            className="w-full py-2 text-center text-xs font-semibold text-gold hover:text-gold/80"
           >
             Весь список →
           </button>
@@ -167,7 +167,7 @@ function FeaturedMatch({ match, kind }: { match: MatchDTO; kind: "hot" | "best" 
           {isHot ? (match.status === "LIVE" ? "Прямо сейчас" : "Матч тура") : "Самый результативный"}
         </p>
         {isHot && match.status === "LIVE" && (
-          <span className="ml-auto flex items-center gap-1 text-[10px] font-bold text-live">
+          <span className="ml-auto flex items-center gap-1 text-xs font-bold text-live">
             <span className="h-1.5 w-1.5 rounded-full bg-live live-dot" />
             LIVE
           </span>
@@ -181,7 +181,7 @@ function FeaturedMatch({ match, kind }: { match: MatchDTO; kind: "hot" | "best" 
           </span>
           <span className="min-w-0 flex-1 truncate">{match.awayTeam.name}</span>
         </div>
-        <p className="mt-2 flex items-center gap-2 text-[11px] text-ink3">
+        <p className="mt-2 flex items-center gap-2 text-xs text-ink3">
           <span>{match.round ? `${match.round}-й тур` : ""}</span>
           <span>·</span>
           <span>{dateStr}</span>
@@ -198,7 +198,7 @@ export function BannerSlot({ banner }: { banner: BannerDTO | undefined }) {
     return (
       <div className="flex h-[190px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-sline bg-s1/50 px-4 text-center">
         <p className="text-xs font-bold uppercase tracking-wide text-ink3">Реклама</p>
-        <p className="mt-1 text-[10px] text-ink3">Слот 300×250 · управляется в админ-панели</p>
+        <p className="mt-1 text-xs text-ink3">Слот 300×250 · управляется в админ-панели</p>
       </div>
     );
   }
@@ -213,7 +213,7 @@ export function BannerSlot({ banner }: { banner: BannerDTO | undefined }) {
         <p className="text-sm font-bold text-ink">{banner.title}</p>
         {banner.text && <p className="mt-1 text-xs text-ink2">{banner.text}</p>}
       </div>
-      <span className="self-start rounded-md bg-gold px-2 py-0.5 text-[10px] font-bold text-goldink">Реклама</span>
+      <span className="self-start rounded-md bg-gold px-2 py-0.5 text-xs font-bold text-goldink">Реклама</span>
     </a>
   );
 }

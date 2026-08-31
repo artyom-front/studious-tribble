@@ -25,7 +25,7 @@ export function initials(name: string): string {
 /** Герб команды: квадрат с инициалами, градиент по hue из id */
 export function Crest({ name, id, size = "md", className }: { name: string; id: string; size?: "xs" | "sm" | "md" | "lg" | "xl"; className?: string }) {
   const h = hashHue(id);
-  const dims = { xs: "h-6 w-6 text-[9px] rounded-md", sm: "h-8 w-8 text-[11px] rounded-lg", md: "h-10 w-10 text-xs rounded-xl", lg: "h-14 w-14 text-base rounded-xl", xl: "h-16 w-16 text-lg rounded-2xl" }[size];
+  const dims = { xs: "h-6 w-6 text-xs rounded-md", sm: "h-8 w-8 text-xs rounded-lg", md: "h-10 w-10 text-xs rounded-xl", lg: "h-14 w-14 text-base rounded-xl", xl: "h-16 w-16 text-lg rounded-2xl" }[size];
   return (
     <span
       aria-hidden
@@ -40,7 +40,7 @@ export function Crest({ name, id, size = "md", className }: { name: string; id: 
 /** Аватар персоны: круг с инициалами */
 export function Avatar({ name, id, size = "md", className }: { name: string; id: string; size?: "xs" | "sm" | "md" | "lg" | "xl"; className?: string }) {
   const h = hashHue(id);
-  const dims = { xs: "h-6 w-6 text-[9px]", sm: "h-8 w-8 text-[11px]", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm", xl: "h-14 w-14 text-base" }[size];
+  const dims = { xs: "h-6 w-6 text-xs", sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm", xl: "h-14 w-14 text-base" }[size];
   return (
     <span
       aria-hidden
@@ -72,7 +72,7 @@ export function FormatChip({ format, className }: { format: string; className?: 
   return (
     <span
       title={title}
-      className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold", className)}
+      className={cn("shrink-0 rounded px-1.5 py-0.5 text-xs font-bold", className)}
       style={{ color, backgroundColor: `${color}1f` }}
     >
       {FORMAT_LABELS[format] ?? format}
@@ -118,7 +118,7 @@ export function StatTile({ value, label, accent, title }: { value: React.ReactNo
   return (
     <div title={title} className="rounded-xl bg-s2 px-3 py-2.5 text-center">
       <p className={cn("font-mono text-xl font-bold tabular", accent ? "text-gold" : "text-ink")}>{value}</p>
-      <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-ink3">{label}</p>
+      <p className="mt-0.5 text-xs font-medium uppercase tracking-wide text-ink3">{label}</p>
     </div>
   );
 }
