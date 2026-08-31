@@ -53,7 +53,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       if (!entry.season) continue;
       const rows = await seasonStandings(seasonId);
       const row = rows.find((r) => r.teamId === id);
-      if (row) standings.push({ season: entry.season, position: row.position, points: row.points, games: row.games, wins: row.wins, draws: row.draws, losses: row.losses, goalsFor: row.goalsFor, goalsAgainst: row.goalsAgainst });
+      if (row) standings.push({ season: entry.season, position: row.position, points: row.points, games: row.games, wins: row.wins, draws: row.draws, losses: row.losses, goalsFor: row.goalsFor, goalsAgainst: row.goalsAgainst, form: row.form ?? [] });
     }
 
     return Response.json({

@@ -1,15 +1,15 @@
 "use client";
 
-// Страница лиги: вкладки Матчи / Таблица / Бомбардиры / Дисциплины / Команды / Судьи.
-// Роут: #/league/{id}/{tab}. Сезон — переключатель в шапке (по умолчанию текущий).
+// Страница лиги «Ночь под прожекторами»: геро с форматом и регламентом,
+// вкладки Матчи / Таблица / Бомбардиры / Дисциплины / Команды / Судьи.
 
 import { useState } from "react";
-import { ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { navigate } from "./router";
 import type { OverviewDTO } from "./types";
-import { FORMAT_LABELS } from "./types";
+import { FORMAT_LABELS } from "@/lib/labels";
 import { EmptyState, LoadingBlock } from "./ui-bits";
+import { Breadcrumbs, FormatChip } from "./visuals";
 import CalendarView from "./CalendarView";
 import StandingsView from "./StandingsView";
 import ScorersView from "./ScorersView";
@@ -50,24 +50,17 @@ export default function LeaguePage({ leagueId, tab, overview, version }: Props) 
 
   return (
     <div className="space-y-3">
-      {/* ---------- Шапка лиги ---------- */}
-      <div className="rounded-xl border border-zinc-200 bg-white">
-        <div className="flex flex-wrap items-center gap-3 px-4 py-3.5">
-          <button
-            onClick={() => navigate("/")}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800"
-            aria-label="Назад к ленте"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <div className="min-w-0">
+      <Breadcrumbs items={[{ label: "Главная", onClick: () => navigate("/") }, { label: league.name }]} className="px-1" />
+
+      {/* ---------- Гери лиги ---------- */}
+      <div className="overflow-hidden rounded-2xl border border-sline bg-s1">
+        <div className="stadium-glow flex flex-wrap items-center gap-3 px-4 py-4">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="shrink-0 rounded bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                {FORMAT_LABELS[league.format] ?? league.format}
-              </span>
-              <h1 className="truncate text-lg font-extrabold tracking-tight text-zinc-900">{league.name}</h1>
+              <FormatChip format={league.format} />
+              <h1 className="truncate text-xl font-black tracking-tight text-ink">{league.name}</h1>
             </div>
-            <p className="mt-0.5 hidden text-xs text-zinc-400 sm:block">
+            <p className="mt-1 hidden text-xs text-ink3 sm:block">
               {league.yellowCardLimit} ЖК → пропуск · КК → {league.redCardBanMatches} матч · техпоражение {league.walkoverScore}:0
               {league.transferWindowEnd && " · трансферное окно до " + new Date(league.transferWindowEnd).toLocaleDateString("ru-RU")}
             </p>
@@ -76,7 +69,7 @@ export default function LeaguePage({ leagueId, tab, overview, version }: Props) 
             <select
               value={seasonId}
               onChange={(e) => setSelectedSeasonId(e.target.value)}
-              className="ml-auto rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs font-medium text-zinc-700 focus:border-emerald-400 focus:outline-none"
+              className="rounded-lg border border-sline bg-s1 px-2.5 py-2 text-xs font-medium text-ink2 focus:border-gold focus:outline-none"
               aria-label="Сезон"
             >
               {league.seasons.map((s) => (
@@ -87,18 +80,18 @@ export default function LeaguePage({ leagueId, tab, overview, version }: Props) 
         </div>
 
         {/* ---------- Вкладки ---------- */}
-        <div className="flex gap-1 overflow-x-auto border-t border-zinc-100 px-2 scrollbar-none">
+        <div className="flex gap-1 overflow-x-auto border-t border-sline/60 px-2 scrollbar-none">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => navigate(`/league/${leagueId}/${t.id}`)}
               className={cn(
-                "relative shrink-0 px-3.5 py-2.5 text-sm font-semibold transition-colors",
-                activeTab === t.id ? "text-emerald-600" : "text-zinc-500 hover:text-zinc-800"
+                "relative shrink-0 px-4 py-2.5 text-sm font-semibold transition-colors",
+                activeTab === t.id ? "text-gold" : "text-ink2 hover:text-ink"
               )}
             >
               {t.label}
-              {activeTab === t.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-emerald-500" />}
+              {activeTab === t.id && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-gold" />}
             </button>
           ))}
         </div>
@@ -109,7 +102,7 @@ export default function LeaguePage({ leagueId, tab, overview, version }: Props) 
       {activeTab === "table" && <StandingsView seasonId={seasonId} version={version} />}
       {activeTab === "scorers" && <ScorersView seasonId={seasonId} version={version} onOpenPlayer={(id) => navigate(`/player/${id}`)} />}
       {activeTab === "discipline" && <DisciplineView seasonId={seasonId} version={version} onOpenPlayer={(id) => navigate(`/player/${id}`)} />}
-      {activeTab === "teams" && <TeamsView seasonId={seasonId} version={version} onOpenPlayer={(id) => navigate(`/player/${id}`)} />}
+      {activeTab === "teams" && <TeamsView seasonId={seasonId} version={version} />}
       {activeTab === "referees" && <RefereesView seasonId={seasonId} version={version} />}
     </div>
   );

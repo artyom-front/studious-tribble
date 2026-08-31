@@ -1,22 +1,22 @@
 "use client";
 
 // ============================================================
-// ScoreBox — шелл портала (livescore-архитектура по референсу):
-// шапка → табы видов футбола → фильтры даты/статуса → 3 колонки:
-// сайдбар топ-лиг · лента матчей по лигам · правая колонка виджетов.
-// Навигация — hash-роутер (#/match/12, #/team/3, ...).
+// SCORES21 · «Ночь под прожекторами» — шелл публичного сайта:
+// тёмная шапка с брендом → меню видов футбола → фильтры →
+// 3 колонки (топ-лиги · лента матчей · виджеты) + баннеры.
+// Админка — отдельный полноэкранный светлый шелл (Ozon-style).
 // ============================================================
 
 import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "sonner";
-import { LogIn, LogOut, Settings2, Trophy } from "lucide-react";
+import { toast } from "sonner";
+import { LogIn, LogOut, Search, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import { BRAND } from "./brand";
 import { navigate, useRoute } from "./router";
 import type { BannerDTO, OverviewDTO, SessionUserDTO } from "./types";
-import { FORMAT_LABELS } from "./types";
+import SearchDialog, { openGlobalSearch } from "./SearchDialog";
 import LeaguesSidebar from "./LeaguesSidebar";
 import RightRail from "./RightRail";
 import MatchDayView from "./MatchDayView";
@@ -26,7 +26,7 @@ import PlayerPage from "./PlayerPage";
 import TeamPage from "./TeamPage";
 import StadiumPage from "./StadiumPage";
 import LoginView from "./LoginView";
-import AdminPanel from "./AdminPanel";
+import AdminShell from "./AdminShell";
 
 const FORMATS: { id: string; label: string }[] = [
   { id: "all", label: "Все виды" },
@@ -36,6 +36,16 @@ const FORMATS: { id: string; label: string }[] = [
   { id: "FUTSAL", label: "Мини-футбол" },
 ];
 
+const FAV_KEY = "s21-fav-leagues";
+
+function loadFavs(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(FAV_KEY) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
 export default function Portal() {
   const route = useRoute();
   const [overview, setOverview] = useState<OverviewDTO | null>(null);
@@ -43,8 +53,23 @@ export default function Portal() {
   const [user, setUser] = useState<SessionUserDTO | null>(null);
   const [version, setVersion] = useState(0);
   const [format, setFormat] = useState("all");
+  const [favs, setFavs] = useState<string[]>([]);
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
+
+  // Избранное хранится в localStorage — читаем после гидратации (без рассинхрона SSR)
+  useEffect(() => {
+    const t = setTimeout(() => setFavs(loadFavs()), 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  const toggleFav = useCallback((leagueId: string) => {
+    setFavs((prev) => {
+      const next = prev.includes(leagueId) ? prev.filter((x) => x !== leagueId) : [...prev, leagueId];
+      localStorage.setItem(FAV_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   const reloadOverview = useCallback(() => {
     fetch("/api/public/overview")
@@ -75,33 +100,80 @@ export default function Portal() {
     toast.success("Вы вышли из системы");
   };
 
-  return (
-    <div className="flex min-h-screen flex-col bg-zinc-100">
-      <Toaster richColors position="top-right" />
+  // ---------- Админка: полноэкранный светлый шелл ----------
+  if (route.name === "admin") {
+    if (!canAdmin) {
+      return (
+        <div className="theme-dark flex min-h-screen items-center justify-center p-4">
+          <Toaster richColors position="top-right" />
+          <div className="max-w-md rounded-2xl border border-sline bg-s1 p-8 text-center">
+            <p className="text-lg font-bold">Доступ ограничен</p>
+            <p className="mt-2 text-sm text-ink2">Для входа в панель управления нужны права администратора, лиги, клуба или судьи.</p>
+            <div className="mt-4 flex justify-center gap-2">
+              <Button variant="outline" className="border-sline bg-transparent text-ink hover:bg-s2" onClick={() => navigate("/")}>На главную</Button>
+              <Button className="bg-gold text-goldink hover:bg-gold/85" onClick={() => navigate("/login")}>Войти</Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <AdminShell
+        user={user!}
+        version={version}
+        bump={bump}
+        onReload={reloadOverview}
+        focusMatchId={route.matchId ?? null}
+        onMatchHandled={() => navigate("/admin")}
+      />
+    );
+  }
 
-      {/* ---------- Шапка (минималистичная) ---------- */}
-      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4">
-          <button
-            className="flex items-center gap-2.5"
-            onClick={() => navigate("/")}
-            aria-label={`${BRAND.name} — на главную`}
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 shadow-sm">
-              <Trophy className="h-5 w-5 text-white" />
+  // ---------- Публичный сайт: тёмная «Ночь под прожекторами» ----------
+  return (
+    <div className="theme-dark flex min-h-screen flex-col bg-s0 text-ink">
+      <Toaster richColors position="top-right" theme="dark" />
+      <SearchDialog />
+
+      {/* ---------- Шапка: минимализм, бренд, поиск, вход ---------- */}
+      <header className="sticky top-0 z-40 border-b border-sline bg-s0/95 backdrop-blur">
+        <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-3 px-4">
+          <button className="flex items-center gap-2.5" onClick={() => navigate("/")} aria-label="SCORES21 — на главную">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold font-mono text-lg font-black tracking-tighter text-goldink shadow-[0_0_24px_rgba(255,212,0,0.35)]">
+              {BRAND.mark}
             </span>
             <span className="text-left leading-none">
-              <span className="block text-lg font-extrabold tracking-tight text-zinc-900">{BRAND.name}</span>
-              <span className="mt-0.5 hidden text-[10px] font-medium text-zinc-400 sm:block">{BRAND.domain} · {BRAND.tagline}</span>
+              <span className="block text-xl font-black tracking-tight">
+                {BRAND.wordmark}
+                <span className="ml-1 text-gold">{BRAND.mark}</span>
+              </span>
+              <span className="mt-0.5 hidden text-[10px] font-medium text-ink3 sm:block">{BRAND.tagline}</span>
             </span>
           </button>
 
+          <button
+            onClick={openGlobalSearch}
+            className="ml-4 hidden h-10 min-w-0 flex-1 max-w-md items-center gap-2 rounded-xl border border-sline bg-s1 px-3.5 text-sm text-ink3 transition-colors hover:border-gold/50 hover:text-ink2 md:flex"
+            aria-label="Поиск по порталу"
+          >
+            <Search className="h-4 w-4 shrink-0" />
+            <span className="flex-1 truncate text-left">Поиск: команды, игроки, судьи…</span>
+            <kbd className="shrink-0 rounded border border-sline bg-s2 px-1.5 py-0.5 font-mono text-[10px]">/</kbd>
+          </button>
+
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={openGlobalSearch}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-sline bg-s1 text-ink2 hover:text-ink md:hidden"
+              aria-label="Поиск"
+            >
+              <Search className="h-4 w-4" />
+            </button>
             {user ? (
               <>
                 <div className="hidden text-right sm:block">
-                  <p className="text-xs font-semibold leading-tight text-zinc-800">{user.personName ?? user.email}</p>
-                  <p className="text-[10px] text-zinc-400">
+                  <p className="max-w-[160px] truncate text-xs font-semibold leading-tight text-ink">{user.personName ?? user.email}</p>
+                  <p className="text-[10px] text-ink3">
                     {user.role === "SUPER_ADMIN" ? "Супер-админ" : user.role === "LEAGUE_ADMIN" ? "Админ лиги" : user.role === "REFEREE" ? "Судья" : user.role === "CLUB_ADMIN" ? "Админ клуба" : "Игрок"}
                   </p>
                 </div>
@@ -109,28 +181,28 @@ export default function Portal() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className={cn(route.name === "admin" && "border-emerald-300 bg-emerald-50 text-emerald-700")}
+                    className={cn("border-sline bg-s1 text-ink2 hover:border-gold/50 hover:bg-s2 hover:text-ink", route.name === "admin" && "border-gold text-gold")}
                     onClick={() => navigate("/admin")}
                   >
                     <Settings2 className="mr-1 h-4 w-4" />
                     <span className="hidden sm:inline">Админка</span>
                   </Button>
                 )}
-                <Button variant="outline" size="sm" onClick={logout} aria-label="Выйти">
+                <Button variant="outline" size="sm" className="border-sline bg-s1 text-ink2 hover:bg-s2 hover:text-ink" onClick={logout} aria-label="Выйти">
                   <LogOut className="h-4 w-4" />
                 </Button>
               </>
             ) : (
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => navigate("/login")}>
+              <Button size="sm" className="bg-gold text-goldink hover:bg-gold/85" onClick={() => navigate("/login")}>
                 <LogIn className="mr-1 h-4 w-4" /> Войти
               </Button>
             )}
           </div>
         </div>
 
-        {/* ---------- Табы видов футбола (аналог меню видов спорта) ---------- */}
-        <nav className="border-t border-zinc-100 bg-zinc-900" aria-label="Виды футбола">
-          <div className="mx-auto flex w-full max-w-[1400px] items-center gap-1 overflow-x-auto px-4 scrollbar-none">
+        {/* ---------- Меню видов футбола ---------- */}
+        <nav className="border-t border-sline/60" aria-label="Виды футбола">
+          <div className="mx-auto flex w-full max-w-[1440px] items-center gap-1 overflow-x-auto px-4 scrollbar-none">
             {FORMATS.map((f) => (
               <button
                 key={f.id}
@@ -139,54 +211,48 @@ export default function Portal() {
                   if (route.name !== "home") navigate("/");
                 }}
                 className={cn(
-                  "relative shrink-0 px-3.5 py-2.5 text-sm font-semibold transition-colors",
-                  format === f.id ? "text-white" : "text-zinc-400 hover:text-zinc-200"
+                  "relative shrink-0 px-4 py-3 text-sm font-semibold transition-colors",
+                  format === f.id ? "text-gold" : "text-ink2 hover:text-ink"
                 )}
               >
                 {f.label}
-                {format === f.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-emerald-400" />}
+                {format === f.id && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-gold" />}
               </button>
             ))}
           </div>
         </nav>
       </header>
 
-      {/* ---------- Верхний баннер (слот TOP, 728×90) ---------- */}
+      {/* ---------- Верхний баннер (слот TOP) ---------- */}
       {topBanner && (
-        <div className="mx-auto w-full max-w-[1400px] px-4 pt-3">
+        <div className="mx-auto w-full max-w-[1440px] px-4 pt-4">
           <a
             href={topBanner.linkUrl ?? "#"}
             target="_blank"
             rel="noopener noreferrer nofollow"
-            className="flex h-[72px] w-full items-center justify-between gap-4 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white px-6"
+            className="flex h-[72px] w-full items-center justify-between gap-4 rounded-xl border border-gold/30 bg-gradient-to-r from-gold/10 to-transparent px-6 transition-colors hover:border-gold/60"
           >
             <div>
-              <p className="text-sm font-bold text-zinc-800">{topBanner.title}</p>
-              {topBanner.text && <p className="text-xs text-zinc-500">{topBanner.text}</p>}
+              <p className="text-sm font-bold">{topBanner.title}</p>
+              {topBanner.text && <p className="text-xs text-ink2">{topBanner.text}</p>}
             </div>
-            <span className="rounded-md bg-amber-400 px-3 py-1 text-xs font-bold text-zinc-900">Реклама</span>
+            <span className="rounded-md bg-gold px-2.5 py-1 text-[10px] font-bold text-goldink">Реклама</span>
           </a>
         </div>
       )}
 
       {/* ---------- 3-колоночная сетка ---------- */}
       <main className="flex-1">
-        <div className="mx-auto grid w-full max-w-[1400px] grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_310px]">
-          {/* Левый сайдбар: топ-лиги + остальные (на мобиле — скрыт) */}
+        <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-4 px-4 py-4 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_320px]">
           <aside className="hidden lg:block">
-            <div className="sticky top-[104px] max-h-[calc(100vh-120px)] overflow-y-auto pr-1">
-              <LeaguesSidebar overview={overview} version={version} activeLeagueId={route.name === "league" ? route.id : null} />
+            <div className="sticky top-[132px] max-h-[calc(100vh-148px)] overflow-y-auto pr-1 scrollbar-s21">
+              <LeaguesSidebar overview={overview} version={version} activeLeagueId={route.name === "league" ? route.id : null} favs={favs} onToggleFav={toggleFav} />
             </div>
           </aside>
 
-          {/* Центр: контент по роуту */}
           <div className="min-w-0">
             {route.name === "home" && (
-              <MatchDayView
-                format={format}
-                overview={overview}
-                version={version}
-              />
+              <MatchDayView format={format} overview={overview} version={version} favs={favs} onToggleFav={toggleFav} />
             )}
             {route.name === "league" && <LeaguePage leagueId={route.id} tab={route.tab} overview={overview} version={version} />}
             {route.name === "match" && <MatchPage matchId={route.id} user={user} onRated={bump} />}
@@ -202,19 +268,10 @@ export default function Portal() {
                 }}
               />
             )}
-            {route.name === "admin" && canAdmin && (
-              <AdminPanel user={user!} version={version} bump={bump} onReload={reloadOverview} focusMatchId={route.matchId ?? null} onMatchHandled={() => navigate("/admin")} />
-            )}
-            {route.name === "admin" && !canAdmin && (
-              <div className="rounded-xl border border-amber-200 bg-white p-6 text-amber-700">
-                Недостаточно прав для доступа к панели управления. <button className="underline" onClick={() => navigate("/login")}>Войти</button>
-              </div>
-            )}
           </div>
 
-          {/* Правая колонка: виджеты + баннеры (на мобиле/планшете — скрыта) */}
           <aside className="hidden xl:block">
-            <div className="sticky top-[104px] max-h-[calc(100vh-120px)] space-y-4 overflow-y-auto">
+            <div className="sticky top-[132px] max-h-[calc(100vh-148px)] space-y-4 overflow-y-auto scrollbar-s21">
               <RightRail overview={overview} banners={banners} version={version} />
             </div>
           </aside>
@@ -222,13 +279,15 @@ export default function Portal() {
       </main>
 
       {/* ---------- Футер ---------- */}
-      <footer className="mt-auto bg-zinc-900 text-zinc-400">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-3 px-4 py-6 text-xs sm:flex-row sm:items-center sm:justify-between">
+      <footer className="mt-auto border-t border-sline bg-[#07090d]">
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 py-6 text-xs text-ink3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="font-bold text-white">{BRAND.name} · {BRAND.domain}</p>
-            <p className="mt-0.5">Спортивно-аналитический портал «{BRAND.tagline}» · демо-стенд по PRD v1.0</p>
+            <p className="font-black tracking-tight text-ink">
+              {BRAND.name} <span className="text-gold">·</span> {BRAND.domain}
+            </p>
+            <p className="mt-0.5">Спортивно-аналитический портал «{BRAND.tagline}» · {BRAND.region} · демо-стенд по PRD v1.0</p>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <div className="flex max-w-md flex-wrap gap-x-4 gap-y-1">
             <span>Дисквалификации</span>
             <span>Техпоражения</span>
             <span>Трансферы</span>

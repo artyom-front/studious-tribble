@@ -1,9 +1,13 @@
 // Конфигурация бренда портала — смена названия в одном месте.
-// Рабочее название: ScoreBox (scoresbox.ru). Альтернативы: FootLab, MatchDay, «ГолПарк», ФУТ21.
+// SCORES21: «scores» (livescore-глагол) + код региона 21 (Чувашия, как на номерах).
+// Визуальная идентичность: «Ночь под прожекторами» — тёмный графит + чувашское золото #FFD400.
 
 export const BRAND = {
-  name: "ScoreBox",
-  domain: "scoresbox.ru",
-  tagline: "Футбол Чувашии — все турниры онлайн",
+  name: "SCORES21",
+  wordmark: "SCORES",
+  mark: "21",
+  domain: "scores21.ru",
+  tagline: "Футбол Чувашии онлайн",
   region: "Республика Чувашия",
+  gold: "#FFD400",
 } as const;

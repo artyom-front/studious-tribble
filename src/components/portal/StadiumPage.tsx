@@ -1,15 +1,16 @@
 "use client";
 
-// Профиль стадиона: характеристики, статистика (матчи/голы/средняя результативность),
+// Профиль стадиона «Ночь под прожекторами»: характеристики, статистика,
 // календарь сыгранных и предстоящих матчей.
 
 import { useState } from "react";
-import { MapPin, Users, Goal, BarChart3, ChevronLeft } from "lucide-react";
+import { MapPin, Users, Goal, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFetch } from "./hooks";
 import { navigate } from "./router";
 import type { MatchDTO } from "./types";
 import { LoadingBlock, EmptyState, matchScore } from "./ui-bits";
+import { Breadcrumbs, StatTile } from "./visuals";
 
 interface StadiumDetail {
   stadium: { id: string; name: string; city: string | null; address: string | null; capacity: number | null };
@@ -33,49 +34,35 @@ export default function StadiumPage({ stadiumId }: { stadiumId: string }) {
 
   return (
     <div className="space-y-3">
-      {/* ---------- Шапка ---------- */}
-      <div className="rounded-xl border border-zinc-200 bg-white px-4 py-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => history.back()}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800"
-            aria-label="Назад"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600/10">
-            <MapPin className="h-6 w-6 text-emerald-600" />
+      <Breadcrumbs items={[{ label: "Главная", onClick: () => navigate("/") }, { label: stadium.name }]} className="px-1" />
+
+      {/* ---------- Гери стадиона ---------- */}
+      <div className="overflow-hidden rounded-2xl border border-sline bg-s1">
+        <div className="stadium-glow flex flex-wrap items-center gap-4 px-4 py-5 sm:px-6">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gold/15">
+            <MapPin className="h-7 w-7 text-gold" />
           </span>
-          <div className="min-w-0">
-            <h1 className="text-xl font-extrabold tracking-tight text-zinc-900">СК «{stadium.name}»</h1>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-zinc-400">
-              {stadium.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{stadium.city}</span>}
-              {stadium.address && <span>{stadium.address}</span>}
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-black tracking-tight text-ink">{stadium.name}</h1>
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink3">
+              {stadium.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{stadium.city}{stadium.address ? `, ${stadium.address}` : ""}</span>}
               {stadium.capacity && <span className="flex items-center gap-1"><Users className="h-3 w-3" />вместимость {stadium.capacity.toLocaleString("ru-RU")}</span>}
             </p>
           </div>
         </div>
-      </div>
 
-      {/* ---------- Статистика ---------- */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { icon: BarChart3, label: "Матчей проведено", value: stats.hosted },
-          { icon: Goal, label: "Голов забито", value: stats.goals },
-          { icon: BarChart3, label: "Голов за матч", value: stats.avgGoals },
-        ].map((s) => (
-          <div key={s.label} className="flex flex-col items-center gap-1 rounded-xl border border-zinc-200 bg-white p-4 text-center">
-            <s.icon className="h-5 w-5 text-emerald-600" />
-            <p className="font-mono text-2xl font-extrabold tabular-nums text-zinc-900">{s.value}</p>
-            <p className="text-xs text-zinc-400">{s.label}</p>
-          </div>
-        ))}
+        {/* Статистика */}
+        <div className="grid grid-cols-3 gap-2 border-t border-sline/60 px-4 py-3">
+          <StatTile value={stats.hosted} label="матчей" />
+          <StatTile value={stats.goals} label="голов" accent />
+          <StatTile value={stats.avgGoals} label="гол/матч" />
+        </div>
       </div>
 
       {/* ---------- Матчи ---------- */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-bold">Матчи на стадионе</p>
+      <div className="overflow-hidden rounded-xl border border-sline bg-s1">
+        <div className="flex items-center justify-between border-b border-sline/60 bg-s2/50 px-4 py-3">
+          <p className="flex items-center gap-1.5 text-sm font-bold text-ink"><BarChart3 className="h-4 w-4 text-gold" /> Матчи на стадионе</p>
           <div className="flex gap-1">
             {([["all", "Все"], ["played", "Сыгранные"], ["upcoming", "Предстоящие"]] as const).map(([id, label]) => (
               <button
@@ -83,7 +70,7 @@ export default function StadiumPage({ stadiumId }: { stadiumId: string }) {
                 onClick={() => setMatchFilter(id)}
                 className={cn(
                   "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                  matchFilter === id ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                  matchFilter === id ? "bg-gold text-goldink" : "bg-s2 text-ink2 hover:text-ink"
                 )}
               >
                 {label}
@@ -91,8 +78,8 @@ export default function StadiumPage({ stadiumId }: { stadiumId: string }) {
             ))}
           </div>
         </div>
-        <div className="max-h-[480px] space-y-1 overflow-y-auto">
-          {matchesFiltered.length === 0 && <p className="py-6 text-center text-xs text-zinc-400">Нет матчей</p>}
+        <div className="max-h-[480px] space-y-1 overflow-y-auto p-3 scrollbar-s21">
+          {matchesFiltered.length === 0 && <p className="py-6 text-center text-xs text-ink3">Нет матчей</p>}
           {matchesFiltered.map((m) => {
             const score = matchScore(m);
             const time = new Date(m.kickoff);
@@ -100,16 +87,17 @@ export default function StadiumPage({ stadiumId }: { stadiumId: string }) {
               <button
                 key={m.id}
                 onClick={() => navigate(`/match/${m.id}`)}
-                className="flex w-full items-center gap-3 rounded-lg border border-zinc-100 px-3 py-2 text-left text-sm hover:bg-emerald-50/40"
+                className="flex w-full items-center gap-3 rounded-xl border border-sline/50 bg-s2/30 px-3 py-2.5 text-left text-sm hover:border-gold/40"
               >
-                <span className="w-16 shrink-0 text-[11px] text-zinc-400">
+                <span className="w-16 shrink-0 text-[11px] text-ink3">
                   {time.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", timeZone: "Europe/Moscow" })}
                 </span>
-                <span className="min-w-0 flex-1 truncate font-medium text-zinc-700">
-                  {m.homeTeam.name} <span className="text-zinc-300">vs</span> {m.awayTeam.name}
+                <Goal className="h-3.5 w-3.5 shrink-0 text-ink3" />
+                <span className="min-w-0 flex-1 truncate text-ink2">
+                  {m.homeTeam.name} <span className="text-ink3">—</span> {m.awayTeam.name}
                 </span>
-                <span className="hidden max-w-[140px] shrink-0 truncate text-[11px] text-zinc-400 md:block">{m.league.name}</span>
-                <span className={cn("shrink-0 font-mono text-sm font-bold", m.status === "WALKOVER" ? "text-amber-600" : "text-zinc-800")}>
+                <span className="hidden truncate text-[11px] text-ink3 md:inline">{m.league.name}</span>
+                <span className={cn("shrink-0 font-mono text-sm font-bold", m.status === "WALKOVER" ? "text-amber-400" : "text-ink")}>
                   {score ? `${score.home}:${score.away}` : time.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" })}
                 </span>
               </button>

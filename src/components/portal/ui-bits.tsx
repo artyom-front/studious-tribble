@@ -1,8 +1,10 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+// Общие UI-примитивы SCORES21 на семантических токенах (bg-s1/text-ink/…):
+// автоматически выглядят корректно и в тёмной теме сайта, и в светлой админке.
+
 import { cn } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { Loader2, SearchX } from "lucide-react";
 
 /** Отображаемый счёт матча с учётом регламентного WO-счёта (COALESCE-логика PRD Epic 2) */
 export function matchScore(m: {
@@ -22,31 +24,38 @@ export function matchScore(m: {
   return null;
 }
 
+/** Чип статуса матча: LIVE пульсирует красным, завершённый — зелёным */
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    SCHEDULED: { label: "Запланирован", cls: "bg-zinc-100 text-zinc-600 border-zinc-200" },
-    LIVE: { label: "Идёт сейчас", cls: "bg-red-50 text-red-600 border-red-200 animate-pulse" },
-    COMPLETED: { label: "Завершён", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    WALKOVER: { label: "Тех. поражение", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    POSTPONED: { label: "Перенесён", cls: "bg-zinc-100 text-zinc-500 border-zinc-200" },
+  const map: Record<string, { label: string; cls: string; dot?: string }> = {
+    SCHEDULED: { label: "Запланирован", cls: "bg-s2 text-ink2" },
+    LIVE: { label: "Идёт сейчас", cls: "bg-live/15 text-live", dot: "bg-live" },
+    COMPLETED: { label: "Завершён", cls: "bg-ok/15 text-ok" },
+    WALKOVER: { label: "Тех. поражение", cls: "bg-warn/15 text-warn" },
+    POSTPONED: { label: "Перенесён", cls: "bg-s2 text-ink3" },
   };
-  const v = map[status] ?? { label: status, cls: "bg-zinc-100 text-zinc-600 border-zinc-200" };
-  return <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium", v.cls)}>{v.label}</span>;
+  const v = map[status] ?? { label: status, cls: "bg-s2 text-ink2" };
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium", v.cls)}>
+      {v.dot && <span className={cn("h-1.5 w-1.5 rounded-full", v.dot, "live-dot")} />}
+      {v.label}
+    </span>
+  );
 }
 
+/** Форма команды за последние матчи: В/Н/П/Т(тех.)/тВ */
 export function FormBadges({ form }: { form: string[] }) {
   const map: Record<string, { label: string; cls: string; title: string }> = {
-    W: { label: "В", cls: "bg-emerald-600 text-white", title: "Победа" },
-    D: { label: "Н", cls: "bg-zinc-300 text-zinc-700", title: "Ничья" },
-    L: { label: "П", cls: "bg-red-500 text-white", title: "Поражение" },
-    T: { label: "Т", cls: "bg-amber-500 text-white", title: "Техническое поражение" },
-    w: { label: "тВ", cls: "bg-emerald-200 text-emerald-800", title: "Техническая победа" },
+    W: { label: "В", cls: "bg-ok text-white", title: "Победа" },
+    D: { label: "Н", cls: "bg-ink3 text-s0", title: "Ничья" },
+    L: { label: "П", cls: "bg-live text-white", title: "Поражение" },
+    T: { label: "Т", cls: "bg-warn text-white", title: "Техническое поражение" },
+    w: { label: "тВ", cls: "bg-warn/30 text-warn", title: "Техническая победа" },
   };
-  if (form.length === 0) return <span className="text-zinc-300">—</span>;
+  if (form.length === 0) return <span className="text-ink3">—</span>;
   return (
     <div className="flex items-center gap-1">
       {form.map((f, i) => {
-        const v = map[f] ?? { label: f, cls: "bg-zinc-200 text-zinc-600", title: f };
+        const v = map[f] ?? { label: f, cls: "bg-s2 text-ink2", title: f };
         return (
           <span key={i} title={v.title} className={cn("inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold", v.cls)}>
             {v.label}
@@ -57,16 +66,18 @@ export function FormBadges({ form }: { form: string[] }) {
   );
 }
 
+/** Позиция игрока сокращением */
 export function PositionBadge({ position }: { position: string | null }) {
   const map: Record<string, string> = { GK: "ВРТ", DF: "ЗАЩ", MF: "ПЗ", FW: "НАП" };
   if (!position || !map[position]) return null;
-  return <span className="text-xs text-zinc-400 font-medium">{map[position]}</span>;
+  return <span className="text-xs font-medium text-ink3">{map[position]}</span>;
 }
 
+/** Счёт в строке/карточке */
 export function ScoreBox({ score, status }: { score: { home: number; away: number } | null; status?: string }) {
-  if (!score) return <span className="text-zinc-300 font-mono">— : —</span>;
+  if (!score) return <span className="font-mono text-ink3">— : —</span>;
   return (
-    <span className={cn("font-mono font-bold tabular-nums", status === "WALKOVER" ? "text-amber-600" : "text-zinc-800")}>
+    <span className={cn("font-mono font-bold tabular", status === "WALKOVER" ? "text-warn" : "text-ink")}>
       {score.home} : {score.away}
     </span>
   );
@@ -74,7 +85,7 @@ export function ScoreBox({ score, status }: { score: { home: number; away: numbe
 
 export function LoadingBlock({ label = "Загрузка..." }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-16 text-zinc-400">
+    <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-sline py-16 text-ink3">
       <Loader2 className="h-5 w-5 animate-spin" />
       <span>{label}</span>
     </div>
@@ -83,7 +94,7 @@ export function LoadingBlock({ label = "Загрузка..." }: { label?: string
 
 export function ErrorBlock({ message }: { message: string }) {
   return (
-    <div className="mx-auto max-w-lg rounded-xl border border-red-200 bg-red-50 p-6 text-center text-red-600">
+    <div className="mx-auto max-w-lg rounded-xl border border-live/30 bg-live/10 p-6 text-center text-live">
       <p className="font-medium">Ошибка загрузки</p>
       <p className="mt-1 text-sm">{message}</p>
     </div>
@@ -92,10 +103,10 @@ export function ErrorBlock({ message }: { message: string }) {
 
 export function EmptyState({ icon, title, hint }: { icon?: React.ReactNode; title: string; hint?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-200 py-12 text-zinc-400">
-      {icon}
-      <p className="font-medium text-zinc-500">{title}</p>
-      {hint && <p className="text-sm">{hint}</p>}
+    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-sline py-12 text-ink3">
+      {icon ?? <SearchX className="h-6 w-6 opacity-60" />}
+      <p className="font-medium text-ink2">{title}</p>
+      {hint && <p className="max-w-sm text-center text-sm">{hint}</p>}
     </div>
   );
 }

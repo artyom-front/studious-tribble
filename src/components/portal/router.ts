@@ -2,6 +2,8 @@
 
 // Мини hash-роутер SPA (в песочнице доступен только маршрут "/", поэтому навигация — через #/...).
 // Даёт шаринг ссылок и кнопку «назад» без перезагрузки: #/match/12, #/team/3, #/league/2/table ...
+// ВАЖНО: начальный стейт всегда "home" (совпадает с SSR), реальный hash применяется
+// после гидратации — иначе возникает hydration mismatch.
 
 import { useEffect, useState } from "react";
 
@@ -15,27 +17,29 @@ export type Route =
   | { name: "login" }
   | { name: "admin"; matchId?: string };
 
+const HOME: Route = { name: "home" };
+
 export function parseHash(raw: string): Route {
   const hash = raw.replace(/^#\/?/, "").replace(/\?.*$/, "").replace(/\/$/, "");
-  if (!hash) return { name: "home" };
+  if (!hash) return HOME;
   const parts = hash.split("/");
   switch (parts[0]) {
     case "league":
-      return parts[1] ? { name: "league", id: parts[1], tab: parts[2] ?? "matches" } : { name: "home" };
+      return parts[1] ? { name: "league", id: parts[1], tab: parts[2] ?? "matches" } : HOME;
     case "match":
-      return parts[1] ? { name: "match", id: parts[1] } : { name: "home" };
+      return parts[1] ? { name: "match", id: parts[1] } : HOME;
     case "team":
-      return parts[1] ? { name: "team", id: parts[1] } : { name: "home" };
+      return parts[1] ? { name: "team", id: parts[1] } : HOME;
     case "player":
-      return parts[1] ? { name: "player", id: parts[1] } : { name: "home" };
+      return parts[1] ? { name: "player", id: parts[1] } : HOME;
     case "stadium":
-      return parts[1] ? { name: "stadium", id: parts[1] } : { name: "home" };
+      return parts[1] ? { name: "stadium", id: parts[1] } : HOME;
     case "login":
       return { name: "login" };
     case "admin":
       return { name: "admin", matchId: parts[1] || undefined };
     default:
-      return { name: "home" };
+      return HOME;
   }
 }
 
@@ -46,9 +50,7 @@ export function navigate(path: string) {
 }
 
 export function useRoute(): Route {
-  const [route, setRoute] = useState<Route>(() =>
-    typeof window === "undefined" ? { name: "home" } : parseHash(window.location.hash)
-  );
+  const [route, setRoute] = useState<Route>(HOME);
 
   useEffect(() => {
     const onChange = () => {
@@ -56,7 +58,12 @@ export function useRoute(): Route {
       window.scrollTo({ top: 0 });
     };
     window.addEventListener("hashchange", onChange);
-    return () => window.removeEventListener("hashchange", onChange);
+    // Пост-гидратационная синхронизация с реальным URL (deep links #/match/…)
+    const t = setTimeout(onChange, 0);
+    return () => {
+      window.removeEventListener("hashchange", onChange);
+      clearTimeout(t);
+    };
   }, []);
 
   return route;

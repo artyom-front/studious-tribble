@@ -1,16 +1,17 @@
 "use client";
 
-// Профиль команды: клуб/город, позиция в таблице, тренер, состав (клик — в игрока),
-// календарь матчей (клик — в матч), лиги кликабельны.
+// Профиль команды «Ночь под прожекторами»: геро с гербом, турнирное положение,
+// состав по позициям с аватарами, календарь матчей с формой.
 
 import { useState } from "react";
-import { Building2, MapPin, Shield, UserCog, ChevronLeft } from "lucide-react";
+import { Building2, MapPin, UserCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFetch } from "./hooks";
 import { navigate } from "./router";
 import type { MatchDTO } from "./types";
-import { FORMAT_LABELS } from "./types";
-import { LoadingBlock, EmptyState, matchScore } from "./ui-bits";
+import { FORMAT_LABELS } from "@/lib/labels";
+import { LoadingBlock, EmptyState, FormBadges, matchScore } from "./ui-bits";
+import { Avatar, Breadcrumbs, Crest, StatTile } from "./visuals";
 
 interface TeamDetail {
   team: {
@@ -22,9 +23,16 @@ interface TeamDetail {
     players: { id: string; name: string; position: string | null; number: number | null; endDate: string | null }[];
     coaches: { id: string; name: string; endDate: string | null }[];
   }[];
-  standings: { season: { id: string; name: string; league: { id: string; name: string; format: string } }; position: number; points: number; games: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number }[];
+  standings: { season: { id: string; name: string; league: { id: string; name: string; format: string } }; position: number; points: number; games: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; form?: string[] }[];
   matches: (MatchDTO & { league: { id: string; name: string; format: string } })[];
 }
+
+const POS_GROUPS: { id: string; title: string }[] = [
+  { id: "GK", title: "Вратари" },
+  { id: "DF", title: "Защитники" },
+  { id: "MF", title: "Полузащитники" },
+  { id: "FW", title: "Нападающие" },
+];
 
 export default function TeamPage({ teamId, version }: { teamId: string; version: number }) {
   const { data, error } = useFetch<TeamDetail>(`/api/public/teams/${teamId}`, version);
@@ -35,132 +43,146 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
 
   const { team, seasons, standings, matches } = data;
   const current = seasons[0];
+  const top = standings[0];
   const matchesFiltered = matches.filter((m) => {
     if (matchFilter === "played") return m.status === "COMPLETED" || m.status === "WALKOVER";
     if (matchFilter === "upcoming") return m.status === "SCHEDULED" || m.status === "POSTPONED" || m.status === "LIVE";
     return true;
   });
 
-  const groupByPos = ["GK", "DF", "MF", "FW"];
+  const wins = top?.wins ?? 0;
+  const draws = top?.draws ?? 0;
+  const losses = top?.losses ?? 0;
+  const goalsFor = top?.goalsFor ?? 0;
 
   return (
     <div className="space-y-3">
-      {/* ---------- Шапка ---------- */}
-      <div className="rounded-xl border border-zinc-200 bg-white px-4 py-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => history.back()}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800"
-            aria-label="Назад"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600/10">
-            <Shield className="h-6 w-6 text-emerald-600" />
-          </span>
-          <div className="min-w-0">
-            <h1 className="text-xl font-extrabold tracking-tight text-zinc-900">{team.name}</h1>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-400">
+      <Breadcrumbs
+        items={[
+          { label: "Главная", onClick: () => navigate("/") },
+          ...(current ? [{ label: current.season.league.name, onClick: () => navigate(`/league/${current.season.league.id}`) }] : []),
+          { label: team.name },
+        ]}
+        className="px-1"
+      />
+
+      {/* ---------- Гери команды ---------- */}
+      <div className="overflow-hidden rounded-2xl border border-sline bg-s1">
+        <div className="stadium-glow flex flex-wrap items-center gap-4 px-4 py-5 sm:px-6">
+          <Crest name={team.name} id={team.id} size="xl" className="ring-1 ring-white/10" />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-black tracking-tight text-ink">{team.name}</h1>
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink3">
               {team.club && (
-                <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{team.club.name}</span>
+                <button className="flex items-center gap-1 hover:text-gold"><Building2 className="h-3 w-3" />{team.club.name}</button>
               )}
               {(team.city ?? team.club?.city) && (
                 <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{team.city ?? team.club?.city}</span>
               )}
               {current && (
-                <span className="cursor-pointer hover:text-emerald-600" onClick={() => navigate(`/league/${current.season.league.id}`)}>
+                <button className="hover:text-gold" onClick={() => navigate(`/league/${current.season.league.id}`)}>
                   {current.season.league.name} · {FORMAT_LABELS[current.season.league.format] ?? current.season.league.format}
-                </span>
+                </button>
               )}
             </p>
           </div>
+          {top && (
+            <div className="flex shrink-0 items-center gap-3 rounded-xl border border-gold/30 bg-gold/5 px-4 py-2.5">
+              <span className="font-mono text-2xl font-black text-gold">{top.position}</span>
+              <span className="text-xs text-ink2">
+                место<br />
+                <span className="font-mono font-bold text-ink">{top.points} очк.</span>
+              </span>
+              {top.form && <FormBadges form={top.form.slice(-5)} />}
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* ---------- Таблица (позиция в сезоне) ---------- */}
-      {standings.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-4">
-          <p className="mb-3 text-sm font-bold">Турнирное положение</p>
-          <div className="space-y-2">
-            {standings.map((s) => (
-              <button
-                key={s.season.id}
-                onClick={() => navigate(`/league/${s.season.league.id}/table`)}
-                className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 px-4 py-3 text-left hover:border-emerald-300"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 font-mono text-sm font-bold text-white">
-                  {s.position}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-zinc-800">{s.season.league.name}</p>
-                  <p className="text-xs text-zinc-400">{s.season.name}</p>
-                </div>
-                <div className="ml-auto flex items-center gap-3 text-center font-mono text-xs text-zinc-500">
-                  <span><b className="block text-sm text-zinc-800">{s.games}</b>игр</span>
-                  <span><b className="block text-sm text-zinc-800">{s.wins}-{s.draws}-{s.losses}</b>В-Н-П</span>
-                  <span><b className="block text-sm text-zinc-800">{s.goalsFor}:{s.goalsAgainst}</b>голы</span>
-                  <span><b className="block text-base text-emerald-600">{s.points}</b>очки</span>
-                </div>
-              </button>
-            ))}
+        {/* Сводные показатели сезона */}
+        {top && (
+          <div className="grid grid-cols-5 gap-2 border-t border-sline/60 px-4 py-3">
+            <StatTile value={top.games} label="матчи" />
+            <StatTile value={`${wins}-${draws}-${losses}`} label="В-Н-П" />
+            <StatTile value={goalsFor} label="голы" accent />
+            <StatTile value={top.goalsFor - top.goalsAgainst > 0 ? `+${top.goalsFor - top.goalsAgainst}` : top.goalsFor - top.goalsAgainst} label="разница" />
+            <StatTile value={top.points} label="очки" accent />
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="grid gap-3 xl:grid-cols-2">
         {/* ---------- Состав + тренер ---------- */}
         {current && (
-          <div className="rounded-xl border border-zinc-200 bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-bold">Состав · {current.season.name}</p>
-              <span className="text-xs text-zinc-400">{current.players.length} игроков</span>
+          <div className="overflow-hidden rounded-xl border border-sline bg-s1">
+            <div className="flex items-center justify-between border-b border-sline/60 bg-s2/50 px-4 py-3">
+              <p className="text-sm font-bold text-ink">Состав · {current.season.name}</p>
+              <span className="text-xs text-ink3">{current.players.filter((p) => !p.endDate).length} в заявке</span>
             </div>
-            {current.coaches.length > 0 && (
-              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                <UserCog className="h-4 w-4 text-amber-600" />
-                {current.coaches.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => navigate(`/player/${c.id}`)}
-                    className="text-sm font-semibold text-zinc-800 hover:text-emerald-700"
-                  >
-                    {c.name}
-                  </button>
-                ))}
-                <span className="text-xs text-zinc-400">тренерский штаб</span>
-              </div>
-            )}
-            <div className="space-y-1">
-              {groupByPos.map((pos) => {
-                const group = current.players.filter((p) => p.position === pos);
-                if (group.length === 0) return null;
-                return (
-                  <div key={pos}>
-                    <p className="px-1 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-zinc-300">
-                      {pos === "GK" ? "Вратари" : pos === "DF" ? "Защитники" : pos === "MF" ? "Полузащитники" : "Нападающие"}
-                    </p>
-                    {group.map((p) => (
+            <div className="p-3">
+              {current.coaches.length > 0 && (
+                <div className="mb-3 flex flex-wrap items-center gap-2.5 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5">
+                  <UserCog className="h-4 w-4 text-amber-400" />
+                  {current.coaches.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => navigate(`/player/${c.id}`)}
+                      className="flex items-center gap-2 text-sm font-semibold text-ink hover:text-gold"
+                    >
+                      <Avatar name={c.name} id={c.id} size="xs" />
+                      {c.name}
+                    </button>
+                  ))}
+                  <span className="text-xs text-ink3">тренерский штаб</span>
+                </div>
+              )}
+              <div className="space-y-1">
+                {POS_GROUPS.map((pos) => {
+                  const group = current.players.filter((p) => p.position === pos.id);
+                  if (group.length === 0) return null;
+                  return (
+                    <div key={pos.id}>
+                      <p className="px-1 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-ink3">{pos.title}</p>
+                      {group.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => navigate(`/player/${p.id}`)}
+                          className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-s2/60"
+                        >
+                          <span className="w-7 shrink-0 text-center font-mono text-xs text-ink3">{p.number ?? "—"}</span>
+                          <Avatar name={p.name} id={p.id} size="xs" />
+                          <span className="min-w-0 flex-1 truncate text-ink2">{p.name}</span>
+                          {p.endDate && <span className="text-[10px] text-amber-400">отзаявлен</span>}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })}
+                {current.players.filter((p) => !p.position).length > 0 && (
+                  <div>
+                    <p className="px-1 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-ink3">Без позиции</p>
+                    {current.players.filter((p) => !p.position).map((p) => (
                       <button
                         key={p.id}
                         onClick={() => navigate(`/player/${p.id}`)}
-                        className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-zinc-50"
+                        className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-s2/60"
                       >
-                        <span className="w-7 shrink-0 text-center font-mono text-xs text-zinc-400">{p.number ?? "—"}</span>
-                        <span className="min-w-0 flex-1 truncate font-medium text-zinc-700">{p.name}</span>
-                        {p.endDate && <span className="text-[10px] text-amber-500">отзаявлен</span>}
+                        <span className="w-7 shrink-0 text-center font-mono text-xs text-ink3">{p.number ?? "—"}</span>
+                        <Avatar name={p.name} id={p.id} size="xs" />
+                        <span className="min-w-0 flex-1 truncate text-ink2">{p.name}</span>
+                        {p.endDate && <span className="text-[10px] text-amber-400">отзаявлен</span>}
                       </button>
                     ))}
                   </div>
-                );
-              })}
+                )}
+              </div>
             </div>
           </div>
         )}
 
         {/* ---------- Матчи ---------- */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-bold">Матчи</p>
+        <div className="overflow-hidden rounded-xl border border-sline bg-s1">
+          <div className="flex items-center justify-between border-b border-sline/60 bg-s2/50 px-4 py-3">
+            <p className="text-sm font-bold text-ink">Матчи</p>
             <div className="flex gap-1">
               {([["all", "Все"], ["played", "Сыгранные"], ["upcoming", "Предстоящие"]] as const).map(([id, label]) => (
                 <button
@@ -168,7 +190,7 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
                   onClick={() => setMatchFilter(id)}
                   className={cn(
                     "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                    matchFilter === id ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                    matchFilter === id ? "bg-gold text-goldink" : "bg-s2 text-ink2 hover:text-ink"
                   )}
                 >
                   {label}
@@ -176,27 +198,39 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
               ))}
             </div>
           </div>
-          <div className="max-h-[480px] space-y-1 overflow-y-auto">
-            {matchesFiltered.length === 0 && <p className="py-6 text-center text-xs text-zinc-400">Нет матчей</p>}
+          <div className="max-h-[520px] space-y-1 overflow-y-auto p-3 scrollbar-s21">
+            {matchesFiltered.length === 0 && <p className="py-6 text-center text-xs text-ink3">Нет матчей</p>}
             {matchesFiltered.map((m) => {
               const isHome = m.homeTeam.id === teamId;
               const score = matchScore(m);
               const time = new Date(m.kickoff);
+              const rival = isHome ? m.awayTeam : m.homeTeam;
+              const rivalScore = score ? (isHome ? score.away : score.home) : null;
+              const myScore = score ? (isHome ? score.home : score.away) : null;
+              const res = score ? (myScore! > rivalScore! ? "W" : myScore! < rivalScore! ? "L" : "D") : null;
               return (
                 <button
                   key={m.id}
                   onClick={() => navigate(`/match/${m.id}`)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-zinc-100 px-3 py-2 text-left text-sm hover:bg-emerald-50/40"
+                  className="flex w-full items-center gap-3 rounded-xl border border-sline/50 bg-s2/30 px-3 py-2.5 text-left text-sm hover:border-gold/40"
                 >
-                  <span className="w-16 shrink-0 text-[11px] text-zinc-400">
+                  <span
+                    className={cn(
+                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-bold",
+                      res === "W" ? "bg-emerald-500 text-white" : res === "L" ? "bg-live text-white" : res === "D" ? "bg-ink3 text-s0" : "bg-s2 text-ink3"
+                    )}
+                    title={res === "W" ? "Победа" : res === "L" ? "Поражение" : res === "D" ? "Ничья" : "Не сыгран"}
+                  >
+                    {res ?? "·"}
+                  </span>
+                  <span className="w-16 shrink-0 text-[11px] text-ink3">
                     {time.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", timeZone: "Europe/Moscow" })}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">
-                    <span className={isHome ? "font-bold text-zinc-900" : "text-zinc-500"}>{m.homeTeam.name}</span>
-                    <span className="mx-1 text-zinc-300">vs</span>
-                    <span className={!isHome ? "font-bold text-zinc-900" : "text-zinc-500"}>{m.awayTeam.name}</span>
+                  <Crest name={rival.name} id={rival.id} size="xs" />
+                  <span className="min-w-0 flex-1 truncate text-ink2">
+                    <span className="text-ink3">{isHome ? "дома vs" : "в гостях у"}</span> {rival.name}
                   </span>
-                  <span className={cn("shrink-0 font-mono text-sm font-bold", m.status === "WALKOVER" ? "text-amber-600" : "text-zinc-800")}>
+                  <span className={cn("shrink-0 font-mono text-sm font-bold", m.status === "WALKOVER" ? "text-amber-400" : "text-ink")}>
                     {score ? `${score.home}:${score.away}` : time.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" })}
                   </span>
                 </button>
@@ -205,6 +239,38 @@ export default function TeamPage({ teamId, version }: { teamId: string; version:
           </div>
         </div>
       </div>
+
+      {/* ---------- Турнирные положения ---------- */}
+      {standings.length > 1 && (
+        <div className="overflow-hidden rounded-xl border border-sline bg-s1">
+          <div className="border-b border-sline/60 bg-s2/50 px-4 py-3">
+            <p className="text-sm font-bold text-ink">Турнирное положение</p>
+          </div>
+          <div className="space-y-2 p-3">
+            {standings.map((s) => (
+              <button
+                key={s.season.id}
+                onClick={() => navigate(`/league/${s.season.league.id}/table`)}
+                className="flex w-full items-center gap-3 rounded-xl border border-sline/50 px-4 py-3 text-left hover:border-gold/40"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-s2 font-mono text-sm font-bold text-gold">
+                  {s.position}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-ink">{s.season.league.name}</p>
+                  <p className="text-xs text-ink3">{s.season.name}</p>
+                </div>
+                <div className="ml-auto flex items-center gap-3 text-center font-mono text-xs text-ink2">
+                  <span><b className="block text-sm text-ink">{s.games}</b>игр</span>
+                  <span><b className="block text-sm text-ink">{s.wins}-{s.draws}-{s.losses}</b>В-Н-П</span>
+                  <span><b className="block text-sm text-ink">{s.goalsFor}:{s.goalsAgainst}</b>голы</span>
+                  <span><b className="block text-base text-gold">{s.points}</b>очки</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

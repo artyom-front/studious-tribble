@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +8,7 @@ import { toast } from "sonner";
 import { LogIn, KeyRound, Info } from "lucide-react";
 import { apiPost } from "./hooks";
 import type { SessionUserDTO } from "./types";
+import { BRAND } from "./brand";
 
 const DEMO_ACCOUNTS = [
   { email: "admin@ff21.ru", password: "admin123", role: "Супер-администратор", desc: "Merge профилей, КДК, аудит, все права" },
@@ -38,47 +38,54 @@ export default function LoginView({ onLoggedIn }: { onLoggedIn: (u: SessionUserD
 
   return (
     <div className="mx-auto grid max-w-3xl gap-4 py-6 lg:grid-cols-2">
-      <Card className="border-zinc-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base"><LogIn className="h-4 w-4 text-emerald-600" /> Вход в систему</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={login} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@ff21.ru" required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Пароль</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
-            </div>
-            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={loading}>
-              <KeyRound className="mr-1 h-4 w-4" /> Войти
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <div className="overflow-hidden rounded-2xl border border-sline bg-s1">
+        <div className="stadium-glow flex items-center gap-2.5 px-5 py-4">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold font-mono text-base font-black text-goldink">{BRAND.mark}</span>
+          <div>
+            <p className="text-sm font-bold text-ink">Вход в систему</p>
+            <p className="text-xs text-ink3">{BRAND.name} · протоколы, заявления, администрирование</p>
+          </div>
+        </div>
+        <form onSubmit={login} className="space-y-4 p-5">
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-ink2">Email</Label>
+            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@ff21.ru" required className="border-sline bg-s1 text-ink placeholder:text-ink3" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-ink2">Пароль</Label>
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required className="border-sline bg-s1 text-ink placeholder:text-ink3" />
+          </div>
+          <Button type="submit" className="w-full bg-gold text-goldink hover:bg-gold/85" disabled={loading}>
+            <KeyRound className="mr-1 h-4 w-4" /> Войти
+          </Button>
+        </form>
+      </div>
 
-      <Card className="border-zinc-200 bg-zinc-900 text-white">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base"><Info className="h-4 w-4 text-emerald-400" /> Демо-аккаунты (RBAC)</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
+      <div className="overflow-hidden rounded-2xl border border-sline bg-s1">
+        <div className="flex items-center gap-2 border-b border-sline/60 bg-s2/50 px-5 py-4">
+          <Info className="h-4 w-4 text-gold" />
+          <p className="text-sm font-bold text-ink">Демо-аккаунты (RBAC)</p>
+        </div>
+        <div className="space-y-2 p-4">
           {DEMO_ACCOUNTS.map((a) => (
             <button
               key={a.email}
               onClick={() => login(undefined, { email: a.email, password: a.password })}
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-800/50 p-3 text-left transition-colors hover:border-emerald-700 hover:bg-zinc-800"
+              className="w-full rounded-xl border border-sline/60 bg-s2/40 p-3 text-left transition-colors hover:border-gold/50 hover:bg-s2/80"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-emerald-400">{a.role}</span>
-                <span className="text-[11px] text-zinc-400">{a.email} / {a.password}</span>
+              <div className="flex flex-wrap items-center justify-between gap-1">
+                <span className="text-sm font-semibold text-gold">{a.role}</span>
+                <span className="text-[11px] text-ink3">{a.email} / {a.password}</span>
               </div>
-              <p className="mt-0.5 text-xs text-zinc-400">{a.desc}</p>
+              <p className="mt-0.5 text-xs text-ink2">{a.desc}</p>
             </button>
           ))}
-        </CardContent>
-      </Card>
+          <p className="pt-1 text-[11px] text-ink3">
+            <LogIn className="mr-1 inline h-3 w-3" />
+            Клик по аккаунту — мгновенный вход. Пароли демо-стенда, в проде — email-подтверждение и 2FA.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

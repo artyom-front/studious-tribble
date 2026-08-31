@@ -1,11 +1,14 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
+// Судейский корпус «Ночь под прожекторами»: карточки судей с рейтингом.
+
 import { Star, Flag } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useFetch } from "./hooks";
 import { navigate } from "./router";
 import type { RefereeStatDTO } from "./types";
 import { LoadingBlock, ErrorBlock, EmptyState } from "./ui-bits";
+import { Avatar } from "./visuals";
 
 export default function RefereesView({ seasonId, version }: { seasonId: string; version: number }) {
   const { data, loading, error } = useFetch<{ referees: RefereeStatDTO[] }>(seasonId ? `/api/public/referees?seasonId=${seasonId}` : null, version);
@@ -18,8 +21,8 @@ export default function RefereesView({ seasonId, version }: { seasonId: string; 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold">Судейский корпус</h2>
-        <p className="text-sm text-zinc-500">Назначения, средние показатели и рейтинг команд</p>
+        <p className="text-sm font-bold text-ink">Судейский корпус</p>
+        <p className="text-xs text-ink3">Назначения, средние показатели и рейтинг команд</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -27,56 +30,50 @@ export default function RefereesView({ seasonId, version }: { seasonId: string; 
           <button
             key={r.personId}
             onClick={() => navigate(`/player/${r.personId}`)}
-            className="rounded-xl border border-zinc-200 bg-white text-left transition-all hover:border-emerald-300 hover:shadow-md"
+            className="rounded-xl border border-sline bg-s1 p-5 text-left transition-all hover:border-gold/50"
           >
-          <Card className="border-0 shadow-none">
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-900 text-emerald-400">
-                  <Flag className="h-5 w-5" />
+            <div className="flex items-center gap-3">
+              <Avatar name={r.name} id={r.personId} size="lg" />
+              <div className="min-w-0">
+                <p className="truncate font-semibold leading-tight text-ink">{r.name}</p>
+                <p className="text-xs text-ink3">{r.matches} обслуженных матчей · профиль →</p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-s2 py-2">
+                <p className="font-mono text-lg font-bold text-amber-400">{r.yellowAvg}</p>
+                <p className="text-[11px] text-ink3">ЖК за матч</p>
+              </div>
+              <div className="rounded-lg bg-s2 py-2">
+                <p className="font-mono text-lg font-bold text-live">{r.redAvg}</p>
+                <p className="text-[11px] text-ink3">КК за матч</p>
+              </div>
+              <div className="rounded-lg bg-s2 py-2">
+                <p className="font-mono text-lg font-bold text-ink2">{r.penaltyAvg}</p>
+                <p className="text-[11px] text-ink3">Пенальти</p>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between border-t border-sline/60 pt-3">
+              <span className="flex items-center gap-1 text-xs text-ink3"><Flag className="h-3 w-3" /> рейтинг команд</span>
+              {r.avgRating !== null ? (
+                <span className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Star key={i} className={cn("h-4 w-4", i <= Math.round(r.avgRating!) ? "fill-gold text-gold" : "text-ink3")} />
+                  ))}
+                  <span className="ml-1 font-mono text-sm font-bold text-gold">{r.avgRating}</span>
+                  <span className="text-[11px] text-ink3">({r.ratingsCount})</span>
                 </span>
-                <div>
-                  <p className="font-semibold leading-tight group-hover:text-emerald-700">{r.name}</p>
-                  <p className="text-xs text-zinc-400">{r.matches} обслуженных матчей · профиль →</p>
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-lg bg-zinc-50 py-2">
-                  <p className="text-lg font-bold font-mono text-yellow-600">{r.yellowAvg}</p>
-                  <p className="text-[11px] text-zinc-400">ЖК за матч</p>
-                </div>
-                <div className="rounded-lg bg-zinc-50 py-2">
-                  <p className="text-lg font-bold font-mono text-red-600">{r.redAvg}</p>
-                  <p className="text-[11px] text-zinc-400">КК за матч</p>
-                </div>
-                <div className="rounded-lg bg-zinc-50 py-2">
-                  <p className="text-lg font-bold font-mono text-zinc-700">{r.penaltyAvg}</p>
-                  <p className="text-[11px] text-zinc-400">Пенальти</p>
-                </div>
-              </div>
-
-              <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-3">
-                <span className="text-xs text-zinc-400">Рейтинг команд</span>
-                {r.avgRating !== null ? (
-                  <span className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <Star key={i} className={`h-4 w-4 ${i <= Math.round(r.avgRating!) ? "fill-amber-400 text-amber-400" : "text-zinc-200"}`} />
-                    ))}
-                    <span className="ml-1 font-mono text-sm font-bold">{r.avgRating}</span>
-                    <span className="text-[11px] text-zinc-400">({r.ratingsCount})</span>
-                  </span>
-                ) : (
-                  <span className="text-xs text-zinc-300">нет оценок</span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+              ) : (
+                <span className="text-xs text-ink3">нет оценок</span>
+              )}
+            </div>
           </button>
         ))}
       </div>
 
-      <p className="text-xs text-zinc-400">
+      <p className="text-xs text-ink3">
         Оценки выставляют капитаны и администраторы клубов после завершённых матчей; авторы оценок скрыты (анонимность по PRD).
       </p>
     </div>

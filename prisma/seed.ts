@@ -503,7 +503,7 @@ async function main() {
     data: [
       {
         placement: "TOP", title: "СпортСити — экипировка для вашего клуба",
-        text: "Футбольная форма, бутсы и вратарские перчатки со скидкой 15% по промокоду SCOREBOX",
+        text: "Футбольная форма, бутсы и вратарские перчатки со скидкой 15% по промокоду SCORES21",
         linkUrl: "https://sportcity.example", priority: 1,
       },
       {
