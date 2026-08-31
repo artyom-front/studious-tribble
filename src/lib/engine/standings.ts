@@ -201,8 +201,14 @@ function sortStandings(list: StandingRow[], matches: StandingsMatch[], order: st
   });
 }
 
-/** Счёт матча с учётом WO-подстановки регламентного счёта */
-export function resolveScore(m: StandingsMatch & { regulationScore?: number }): { home: number; away: number } {
+/** Счёт матча с учётом WO-подстановки регламентного счёта (COALESCE на чтении) */
+export function resolveScore(m: {
+  status: string;
+  walkoverType: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  regulationScore?: number;
+}): { home: number; away: number } {
   if (m.status === "COMPLETED") return { home: m.homeScore ?? 0, away: m.awayScore ?? 0 };
   if (m.status === "WALKOVER" && m.walkoverType) {
     const reg = walkoverScore(m.walkoverType, m.regulationScore ?? 3);

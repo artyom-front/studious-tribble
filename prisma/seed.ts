@@ -67,9 +67,8 @@ const POSITIONS_F6 = ["GK", "DF", "MF", "MF", "FW", "FW"];
 async function main() {
   console.log("🧹 Очистка БД...");
   const tables = ["auditLog", "refereeRating", "suspension", "lineupEntry", "matchEvent", "registration", "match", "stage", "season", "league", "banner", "stadium", "team", "club", "person", "user"];
-  for (const t of tables as const) {
-    // @ts-expect-error динамическое имя таблицы
-    await db[t].deleteMany();
+  for (const t of tables) {
+    await (db as any)[t].deleteMany();
   }
 
   // ---------- Стадионы ----------
@@ -490,7 +489,7 @@ async function main() {
   for (const m of r5) {
     const side = himikSide(m);
     const extraY = side ? { yellows: [{ side, personId: himikDF.id }] } : {};
-    const forced = m.id === redCardMatch.id ? { redCard: { side: "away", minute: 74 } } : {};
+    const forced: { redCard?: { side: "home" | "away"; minute: number } } = m.id === redCardMatch.id ? { redCard: { side: "away", minute: 74 } } : {};
     await simulate(m, squadsL1, 11, { ...forced, ...extraY, score: forcedScoreFor(m, 5) });
   }
   await assignWalkover(woMatch.id, "HOME", null, "Неявка команды хозяев на матч (сообщение судьи)");

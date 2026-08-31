@@ -78,8 +78,8 @@ function matchesWord(n: number): string {
 
 type Tab = "career" | "stats" | "discipline";
 
-export default function PlayerPage({ personId }: { personId: string }) {
-  const { data, error } = useFetch<PlayerDetail>(`/api/public/players/${personId}`);
+export default function PlayerPage({ personId, initial }: { personId: string; initial?: PlayerDetail | null }) {
+  const { data, error } = useFetch<PlayerDetail>(`/api/public/players/${personId}`, 0, initial);
   const [tab, setTab] = useState<Tab>("career");
 
   if (error) return <EmptyState title="Персона не найдена" hint={error} />;

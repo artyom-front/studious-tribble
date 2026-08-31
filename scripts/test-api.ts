@@ -1,5 +1,6 @@
 // Сквозной тест ключевых бизнес-правил PRD через API
-const BASE = "http://localhost:3000";
+// BASE можно переопределить: API_URL=http://localhost:3100 bun scripts/test-api.ts
+const BASE = process.env.API_URL || "http://localhost:3000";
 let cookie = "";
 
 async function api(path, body, method = "POST") {
@@ -166,7 +167,7 @@ function check(name, cond, extra = "") {
       const before = dup.links;
       r = await api("/api/admin/merge", { fromId: dup.id, toId: canonical.id });
       check("Merge выполняется", r.status === 200, JSON.stringify(r.j));
-      check("Связи перепривязаны", r.j.transferred && Object.values(r.j.transferred).some((v) => v > 0));
+      check("Связи перепривязаны", r.j.transferred && Object.values(r.j.transferred).some((v) => Number(v) > 0));
       void before;
     }
   }

@@ -9,6 +9,7 @@ import { CalendarDays, ChevronDown, ChevronRight, Flame, Info, MapPin, Snowflake
 import { cn } from "@/lib/utils";
 import { useFetch } from "./hooks";
 import { navigate, mskDay } from "./router";
+import { useFavs, toggleFavLeague } from "./favs";
 import type { MatchDayDTO, OverviewDTO, LivescoreMatchDTO, MatchSignalSideDTO } from "./types";
 import { FormatChip } from "./visuals";
 import { LoadingBlock, matchScore, EmptyState, StreakMark } from "./ui-bits";
@@ -17,8 +18,8 @@ interface Props {
   format: string;
   overview: OverviewDTO | null;
   version: number;
-  favs: string[];
-  onToggleFav: (leagueId: string) => void;
+  /** SSR-данные ленты «сегодня» — мгновенная гидратация без скелетона */
+  initialDay?: { leagues: MatchDayDTO[] } | null;
 }
 
 type DayTab = "yesterday" | "today" | "tomorrow" | "all";
@@ -38,16 +39,20 @@ const STATUS_TABS: { id: StatusFilter; label: string }[] = [
   { id: "upcoming", label: "Предстоящие" },
 ];
 
-export default function MatchDayView({ format, version, favs, onToggleFav }: Props) {
+export default function MatchDayView({ format, version, initialDay }: Props) {
   const [dayTab, setDayTab] = useState<DayTab>("today");
   const [customDate, setCustomDate] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusFilter>("all");
   const [liveTick, setLiveTick] = useState(0); // авто-обновление при LIVE
+  const favs = useFavs();
 
   const dateParam = customDate ?? (dayTab === "all" ? "all" : dayTab === "today" ? mskDay(0) : dayTab === "yesterday" ? mskDay(-1) : mskDay(1));
+  const isToday = dayTab === "today" && !customDate;
   const { data, loading, error } = useFetch<{ leagues: MatchDayDTO[] }>(
     `/api/public/matches/day?date=${dateParam}&format=${format}`,
-    version + liveTick
+    version + liveTick,
+    // SSR отдаёт ленту «сегодня» в текущем формате — используем её как стартовое состояние
+    isToday && initialDay ? initialDay : null
   );
 
   const anyLive = useMemo(
@@ -146,7 +151,7 @@ export default function MatchDayView({ format, version, favs, onToggleFav }: Pro
             <span className="hidden text-xs text-ink3 sm:inline">· {l.season.name}</span>
             <div className="ml-auto flex items-center gap-1">
               <button
-                onClick={() => onToggleFav(l.league.id)}
+                onClick={() => toggleFavLeague(l.league.id)}
                 className={cn("flex h-7 w-7 items-center justify-center rounded-lg transition-colors", favs.includes(l.league.id) ? "text-gold" : "text-ink3 hover:text-ink2")}
                 aria-label={favs.includes(l.league.id) ? "Убрать из избранного" : "Добавить в избранное"}
                 title={favs.includes(l.league.id) ? "Убрать из избранного" : "В избранное"}

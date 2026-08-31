@@ -8,6 +8,7 @@ import { ChevronDown, Star, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFetch } from "./hooks";
 import { navigate } from "./router";
+import { useFavs, toggleFavLeague } from "./favs";
 import type { LeagueDTO, OverviewDTO, StandingRowDTO } from "./types";
 import { FORMAT_LABELS } from "@/lib/labels";
 
@@ -15,11 +16,11 @@ interface Props {
   overview: OverviewDTO | null;
   version: number;
   activeLeagueId: string | null;
-  favs: string[];
-  onToggleFav: (leagueId: string) => void;
 }
 
-export default function LeaguesSidebar({ overview, version, activeLeagueId, favs, onToggleFav }: Props) {
+export default function LeaguesSidebar({ overview, version, activeLeagueId }: Props) {
+  const favs = useFavs();
+  const onToggleFav = toggleFavLeague;
   const leagues = overview?.leagues ?? [];
   const pinned = leagues.filter((l) => l.isPinned).sort((a, b) => a.priority - b.priority);
   const favorite = leagues.filter((l) => favs.includes(l.id));

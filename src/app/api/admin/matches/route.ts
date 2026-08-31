@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     if (Number.isNaN(kickoffDate.getTime())) throw new HttpError(422, "Некорректная дата начала");
 
     // этап: либо передан, либо первый этап сезона (или создаём автоматически)
-    let stage = stageId ? await db.stage.findUnique({ where: { id: stageId }, include: { season: true } }) : null;
+    let stage: { id: string } | null = stageId ? await db.stage.findUnique({ where: { id: stageId }, select: { id: true } }) : null;
     if (stageId && !stage) throw new HttpError(404, "Этап не найден");
     if (!stage) {
       if (!seasonId) throw new HttpError(422, "Укажите сезон или этап");
@@ -70,6 +70,7 @@ export async function POST(req: Request) {
       if (!season) throw new HttpError(404, "Сезон не найден");
       stage = season.stages[0] ?? (await db.stage.create({ data: { seasonId: season.id, name: "Регулярный чемпионат", type: "ROUND_ROBIN" } }));
     }
+    if (!stage) throw new HttpError(422, "Не удалось определить этап для матча");
 
     const [home, away] = await Promise.all([
       db.team.findUnique({ where: { id: homeTeamId } }),

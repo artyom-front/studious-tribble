@@ -1,12 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-/** Мини-хук загрузки данных с авто-перезагрузкой при смене версии данных */
-export function useFetch<T>(url: string | null, version = 0) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(!!url);
+/** Мини-хук загрузки данных с авто-перезагрузкой при смене версии данных.
+ *  initial: данные из SSR — отдаются сразу, первый fetch этого же URL
+ *  пропускается (гидратация мгновенная, без «мигания» скелетона).
+ *  Смена URL или версии (LIVE/действия) — обычная загрузка. */
+export function useFetch<T>(url: string | null, version = 0, initial?: T | null) {
+  const [data, setData] = useState<T | null>(initial ?? null);
+  const [loading, setLoading] = useState(initial == null && !!url);
   const [error, setError] = useState<string | null>(null);
+  // (url, версия), для которого действует initial: пока они не изменились — не фетчим
+  const initialKey = useRef(initial != null && url ? `${url}#${version}` : null);
+  const [skipKey, setSkipKey] = useState(initialKey.current);
 
   const load = useCallback(async () => {
     if (!url) return;
@@ -25,6 +31,10 @@ export function useFetch<T>(url: string | null, version = 0) {
   }, [url]);
 
   useEffect(() => {
+    const key = url ? `${url}#${version}` : null;
+    // SSR-данные актуальны для этого url+version — не дублируем запрос
+    if (key && key === skipKey) return;
+    setSkipKey(null);
     void load();
   }, [load, version]);
 

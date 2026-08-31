@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFetch, fmtDate, fmtShortDate, apiPost } from "./hooks";
-import { navigate } from "./router";
+import { navigate, useSession } from "./router";
 import type { MatchDTO, SessionUserDTO, StandingRowDTO, MatchSignalsDTO } from "./types";
 import { EVENT_SHORT_LABELS, STREAK_LABELS, STREAK_MIN } from "@/lib/labels";
 import { StatusBadge, matchScore, LoadingBlock, EmptyState, FormBadges, StreakMark } from "./ui-bits";
@@ -79,8 +79,7 @@ interface MatchDetail {
 
 interface Props {
   matchId: string;
-  user: SessionUserDTO | null;
-  onRated: () => void;
+  initial?: MatchDetail | null;
 }
 
 type Tab = "preview" | "timeline" | "lineups" | "table";
@@ -104,10 +103,13 @@ function LiveClock({ kickoff }: { kickoff: string }) {
   );
 }
 
-export default function MatchPage({ matchId, user, onRated }: Props) {
+export default function MatchPage({ matchId, initial }: Props) {
   const [version, setVersion] = useState(0);
   const [tab, setTab] = useState<Tab>("preview");
-  const { data, error } = useFetch<MatchDetail>(`/api/public/matches/${matchId}`, version);
+  // сессия — на клиенте (SSR-страница остаётся кэшируемой для SEO)
+  const { user } = useSession<SessionUserDTO>();
+  const { data, error } = useFetch<MatchDetail>(`/api/public/matches/${matchId}`, version, initial);
+  const onRated = () => setVersion((v) => v + 1);
 
   // LIVE: авто-обновление каждые 30 секунд — счёт и события подтягиваются сами
   const isLive = data?.match.status === "LIVE";
@@ -210,7 +212,7 @@ export default function MatchPage({ matchId, user, onRated }: Props) {
 
         {canEdit && (m.status === "SCHEDULED" || m.status === "LIVE") && (
           <div className="border-t border-sline/60 p-3">
-            <Button className="w-full bg-gold text-goldink hover:bg-gold/85" onClick={() => navigate(`/admin/${m.id}`)}>
+            <Button className="w-full bg-gold text-goldink hover:bg-gold/85" onClick={() => navigate(`/admin?match=${m.id}`)}>
               <ClipboardPen className="mr-1 h-4 w-4" /> Ввод протокола матча
             </Button>
           </div>
@@ -290,7 +292,11 @@ function TeamHeroColumn({ teamId, name, sideLabel, signals }: {
           <span className={cn("mt-1 hidden items-center justify-center gap-1 text-xs sm:flex", signals.topScorerOut ? "text-live" : "text-ink3")}>
             <BallIcon className="h-3 w-3" />
             бомбардир: {signals.topScorer.name} ({signals.topScorer.goals})
-            {signals.topScorerOut && <Ban className="h-3 w-3" title="дисквалифицирован — не сыграет" />}
+            {signals.topScorerOut && (
+              <span title="дисквалифицирован — не сыграет">
+                <Ban className="h-3 w-3" />
+              </span>
+            )}
           </span>
         )}
       </span>
@@ -542,14 +548,15 @@ function PreviewTab({ m, standings, h2h, missing, signals, insights, user, refre
       )}
 
       {/* ---------- Судья и оценка судейства ---------- */}
-      {m.referee && <RefereeBlock m={m} user={user} avgRating={avgRating} refresh={refresh} onRated={onRated} />}
+      {m.referee && <RefereeBlock m={m} referee={m.referee} user={user} avgRating={avgRating} refresh={refresh} onRated={onRated} />}
     </div>
   );
 }
 
 /** Блок судьи: карточка-ссылка на профиль + средняя оценка + форма голосования */
-function RefereeBlock({ m, user, avgRating, refresh, onRated }: {
+function RefereeBlock({ m, referee, user, avgRating, refresh, onRated }: {
   m: NonNullable<MatchDetail["match"]>;
+  referee: { id: string; name: string };
   user: SessionUserDTO | null;
   avgRating: number | null;
   refresh: () => void;
@@ -607,7 +614,7 @@ function RefereeBlock({ m, user, avgRating, refresh, onRated }: {
             <p className="text-xs text-ink3">Оценок судейства пока нет</p>
           )}
 
-          {user && user.personId !== m.referee.id && m.status === "COMPLETED" && (
+          {user && user.personId !== referee.id && m.status === "COMPLETED" && (
             <div className="mt-3 space-y-2 border-t border-sline/60 pt-3">
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -629,7 +636,7 @@ function RefereeBlock({ m, user, avgRating, refresh, onRated }: {
             </div>
           )}
           {!user && m.status === "COMPLETED" && <p className="mt-2 text-xs text-ink3">Войдите в систему, чтобы оценить судью</p>}
-          {user && user.personId === m.referee.id && <p className="mt-2 text-xs text-ink3">Судья не может оценивать сам себя</p>}
+          {user && user.personId === referee.id && <p className="mt-2 text-xs text-ink3">Судья не может оценивать сам себя</p>}
         </div>
       </div>
     </section>

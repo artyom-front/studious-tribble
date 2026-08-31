@@ -260,7 +260,9 @@ curl -s http://127.0.0.1:3000/api/health
 - [ ] HTTPS работает, редирект 80→443 активен, `Strict-Transport-Security` виден в ответах
 - [ ] `/api/health` отвечает `ok:true`
 - [ ] Вход под боевым админом работает; cookie `sid` помечена `Secure`
-- [ ] Брутфорс-защита: 11-я попытка входа за минуту возвращает 429
+- [ ] 2FA (TOTP) включена для всех админов: «Панель → Безопасность», резервные коды сохранены
+- [ ] Брутфорс-защита: 11-я НЕУДАЧНАЯ попытка входа за минуту возвращает 429
+- [ ] CSRF: POST с чужим Origin возвращает 403 (проверка `curl -X POST -H 'Origin: https://evil' .../api/admin/totp`)
 - [ ] Крон бэкапов настроен, в `backups/` появился первый файл
 - [ ] `certbot renew --dry-run` прошёл
 - [ ] Проверены firewal/ufw: наружу открыты только 80/443 (и SSH)
@@ -271,21 +273,97 @@ curl -s http://127.0.0.1:3000/api/health
 
 | Ограничение | План |
 |---|---|
-| SPA на hash-роутинге — SEO видит только главную | M5: SSR-страницы матча/лиги + JSON-LD SportsEvent |
 | LIVE-счёт обновляется поллингом 30 с | M5: WebSocket (nginx уже готов к upgrade) |
-| Rate-limit логина — в памяти процесса | Redis при мульти-инстансе |
+| Rate-limit логина/OTP — в памяти процесса | Redis при мульти-инстансе |
 | Баннеры — текстовые слоты | загрузка картинок в S3 |
-| Нет 2FA/email-подтверждения | после интеграции почтового сервиса |
+| CSP без nonce (unsafe-inline для Next-гидратации) | ужесточить при выносе inline-скриптов |
+
+Сделано в этой версии: SSR-страницы с JSON-LD (SEO видит весь контент), TOTP-2FA для
+всех сотрудников, CSRF-защита мутаций, прод-CI/CD (тесты → образ → деплой → откат).
 
 ---
 
-## 13. Скатч-карта команды разработчика
+## 14. 2FA (TOTP) — двухфакторная защита аккаунтов
+
+Включается каждым сотрудником самостоятельно: **/admin → Система → Безопасность**.
+
+- Стандарт **RFC 6238** (Google Authenticator, Яндекс.Ключ, 1Password): 6 цифр, шаг 30 с, окно ±30 с.
+- Вход: пароль → подписанный 5-минутный челлендж → код из приложения **или** одноразовый резервный код.
+- **Анти-replay**: повторно введённый код отклоняется (запоминается последний принятый шаг).
+- **8 резервных кодов** выдаются один раз при включении (sha256-хэши в БД); перегенерация — по паролю.
+- Отключение 2FA — кодом приложения **или** паролем; все действия пишутся в журнал аудита.
+- Брутфорс-защита: 10 неудачных попыток/мин на IP, 10 провалов на челлендж — челлендж сгорает.
+- Потерян телефон: резервный код → «Безопасность» → перегенерация. Полная потеря доступа — супер-админ
+  может сбросить 2FA напрямую в БД: `UPDATE User SET totpEnabled=0, totpSecret=NULL WHERE email='…'`.
+
+---
+
+## 15. SSR/SEO — что уже работает
+
+Публичный сайт отдаёт **серверный HTML** (не SPA): поисковик и «Просмотр HTML-кода» видят контент.
+
+| Страница | Рендер | Кэш | SEO-разметка |
+|---|---|---|---|
+| `/` (livescore) | dynamic SSR | — | OG, keywords, canonical |
+| `/match/[id]` | SSR | ISR 30 c | SportsEvent, BreadcrumbList, OG, canonical |
+| `/league/[id]/[tab]` | SSR | ISR 60 c | BreadcrumbList, OG, canonical |
+| `/team/[id]` | SSR | ISR 120 c | SportsTeam, BreadcrumbList |
+| `/player/[id]` | SSR | ISR 120 c | Person, BreadcrumbList |
+| `/stadium/[id]` | SSR | ISR 300 c | StadiumOrArena, BreadcrumbList |
+| `/admin` | client | noindex | robots + X-Robots-Tag |
+
+Дополнительно: `sitemap.xml` (матчи/лиги/команды/персоны/стадионы), `robots.txt` (закрыты /admin и /api),
+404-страницы с корректным HTTP-статусом. Смена домена → обновить `SITE_URL` (канонические URL и sitemap).
+
+Старые ссылки вида `#/match/…` автоматически редиректятся на путь `/match/…`.
+
+---
+
+## 16. CI/CD — пайплайн поставки
+
+**CI** (`.github/workflows/ci.yml`) — на каждый PR/push в main:
+
+1. `quality` — ESLint + `tsc --noEmit` + 54 юнит-теста движков (~1 мин, кэш bun).
+2. `integration` — чистая SQLite + сид + `next build` + сервер :3100 → 36 инвариантов PRD
+   (`scripts/test-api.ts`) + полный 2FA-флоу + smoke SSR/SEO (headers, JSON-LD, 404, CSRF).
+3. `docker` — сборка прод-образа (main only, без push).
+4. `audit` — `bun audit --level critical`.
+
+**CD** (`.github/workflows/cd.yml`) — по тегу `v*` или ручной запуск (environment=production, нужен approval):
+
+1. Сборка и push образа в **GHCR** (теги: версия, sha, latest).
+2. SSH-деплой на сервер: `scripts/deploy.sh <tag>` — бэкап БД → `prisma db push` → `docker compose up -d` →
+   health-check `/api/health` (90 с) → фиксация тега в `.deploy/history`.
+3. **Авто-откат** при провале health: `scripts/rollback.sh` поднимает предыдущий рабочий тег из истории.
+4. Внешний health-check из раннера + ручной job-откат с environment-approval.
+
+Secrets для CD: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PUBLIC_URL`.
+На сервере: `docker login ghcr.io` (read-токен) один раз от пользователя раннера.
+
+Локально то же самое руками:
+
+```bash
+bun run verify     # lint + typecheck + unit
+bun run test:all   # + интеграция (сервер должен быть поднят; мутирует БД!)
+bun run build && bun run start:prod
+```
+
+---
+
+## 17. Скатч-карта команды разработчика
 
 | Файл | Роль |
 |---|---|
-| `prisma/schema.prisma` | 15+ моделей домена (Person/Team/Club, дисквалификации, заявки) |
+| `prisma/schema.prisma` | 15+ моделей домена (Person/Team/Club, дисквалификации, заявки, 2FA-поля User) |
 | `src/lib/engine/*` | расписание, таблицы, дисциплина, lifecycle матчей, сигналы |
-| `src/app/api/**` | публичный API + админ-CRUD (все с аудитом) |
-| `src/components/portal/*` | livescore-сайт + Ozon-админка |
+| `src/lib/services/*` | сервис-слой: единый источник данных для API и SSR-страниц |
+| `src/lib/totp.ts` | RFC 6238: коды, окно ±30 c, анти-replay, резервные коды |
+| `src/app/api/**` | публичный API + админ-CRUD + auth/2FA (всё с аудитом) |
+| `src/app/(site)/**` | SSR-страницы: матч/лига/команда/игрок/стадион + метаданные/JSON-LD |
+| `src/app/admin/` | панель управления (noindex, вход только здесь) |
+| `src/proxy.ts` | security-фильтр: CSRF origin-check, noindex для /admin и /api |
+| `src/components/portal/*` | livescore-сайт + Ozon-админка + панель «Безопасность» |
 | `prisma/seed.ts` | демо-данные (только для стендов!) |
-| `scripts/test-api.ts` | 36 инвариант-проверок PRD — гонять перед релизом |
+| `tests/unit/*` | юнит-тесты движков (TOTP/расписание/таблица/стрики) — `bun test` |
+| `tests/integration/*` | 36 инвариантов PRD + 2FA-флоу + smoke SSR/SEO — `bun run test:api` |
+| `.github/workflows/*` | CI (качество → интеграция → Docker) и CD (GHCR → SSH → откат) |

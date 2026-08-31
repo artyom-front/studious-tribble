@@ -42,8 +42,8 @@ const POS_GROUPS: { id: string; title: string }[] = [
   { id: "FW", title: "Нападающие" },
 ];
 
-export default function TeamPage({ teamId, version }: { teamId: string; version: number }) {
-  const { data, error } = useFetch<TeamDetail>(`/api/public/teams/${teamId}`, version);
+export default function TeamPage({ teamId, version = 0, initial }: { teamId: string; version?: number; initial?: TeamDetail | null }) {
+  const { data, error } = useFetch<TeamDetail>(`/api/public/teams/${teamId}`, version, initial);
   const [matchFilter, setMatchFilter] = useState<"all" | "played" | "upcoming">("all");
 
   if (error) return <EmptyState title="Команда не найдена" hint={error} />;

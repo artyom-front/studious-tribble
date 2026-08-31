@@ -31,9 +31,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+# Prisma CLI — для схемных обновлений при деплое (scripts/deploy.sh)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
 
 # том под SQLite-базу
-RUN mkdir -p /app/db && chown -nextjs:nodejs /app/db
+RUN mkdir -p /app/db && chown nextjs:nodejs /app/db
 VOLUME /app/db
 
 USER nextjs

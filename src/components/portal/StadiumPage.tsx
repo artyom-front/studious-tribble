@@ -18,8 +18,8 @@ interface StadiumDetail {
   matches: (MatchDTO & { league: { id: string; name: string; format: string } })[];
 }
 
-export default function StadiumPage({ stadiumId }: { stadiumId: string }) {
-  const { data, error } = useFetch<StadiumDetail>(`/api/public/stadiums/${stadiumId}`);
+export default function StadiumPage({ stadiumId, initial }: { stadiumId: string; initial?: StadiumDetail | null }) {
+  const { data, error } = useFetch<StadiumDetail>(`/api/public/stadiums/${stadiumId}`, 0, initial);
   const [matchFilter, setMatchFilter] = useState<"all" | "played" | "upcoming">("all");
 
   if (error) return <EmptyState title="Стадион не найден" hint={error} />;

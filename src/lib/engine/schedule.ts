@@ -11,6 +11,9 @@ export interface ScheduleSlot {
  * Классический алгоритм Бергера: одна команда фиксирована,
  * остальные вращаются по кругу. Для двойного круга второй проход
  * генерируется с реверсом поля.
+ * Баланс «дом/в гостях»: хозяином пары становится команда с меньшим
+ * числом домашних матчей (жадное выравнивание) — итоговое
+ * расхождение для каждой команды не больше 1.
  */
 export function generateRoundRobin(teamIds: string[], double = false): ScheduleSlot[] {
   const teams = [...teamIds];
@@ -24,6 +27,7 @@ export function generateRoundRobin(teamIds: string[], double = false): ScheduleS
   const half = n / 2;
   const roundsCount = n - 1;
   const slots: ScheduleSlot[] = [];
+  const homeCount = new Map<string, number>();
 
   const fixed = teams[n - 1];
   const rotating = teams.slice(0, n - 1);
@@ -39,9 +43,13 @@ export function generateRoundRobin(teamIds: string[], double = false): ScheduleS
 
     for (const [a, b] of pairs) {
       if (a === "__BYE__" || b === "__BYE__") continue;
-      // чередование хозяев по чётности тура для баланса «дома/в гостях»
-      const home = r % 2 === 0 ? a : b;
-      const away = r % 2 === 0 ? b : a;
+      // жадный баланс: хозяин — та команда, что играла дома реже;
+      // при равенстве — чередование по чётности тура (визуальное разнообразие)
+      const ha = homeCount.get(a) ?? 0;
+      const hb = homeCount.get(b) ?? 0;
+      const home = ha > hb ? b : ha < hb ? a : r % 2 === 0 ? a : b;
+      const away = home === a ? b : a;
+      homeCount.set(home, (homeCount.get(home) ?? 0) + 1);
       slots.push({ round: r + 1, homeTeamId: home, awayTeamId: away });
     }
 

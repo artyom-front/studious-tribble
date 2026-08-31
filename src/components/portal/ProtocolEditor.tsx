@@ -189,7 +189,7 @@ export default function ProtocolEditor({ matchId, user, onBack, bump }: Props) {
   }
 
   async function completeMatch() {
-    if (!m?.refereeId) {
+    if (!m?.referee) {
       toast.error("Матч не может быть завершён без назначенного главного судьи (инвариант PRD §4)");
       return;
     }
@@ -352,7 +352,7 @@ export default function ProtocolEditor({ matchId, user, onBack, bump }: Props) {
                           <span className="w-7 text-center font-mono text-xs text-zinc-400">{p.number ?? "—"}</span>
                           <span className="flex-1 truncate font-medium">{p.name}</span>
                           {p.position && <span className="text-xs text-zinc-400">{p.position}</span>}
-                          {suspended && (
+                          {p.suspension && (
                             <span className="flex items-center gap-1 text-xs font-medium text-red-600">
                               <Ban className="h-3 w-3" />
                               {p.suspension.isLifetime ? "пожизненно" : `бан ${p.suspension.matchesRemaining} матч.`}
@@ -494,8 +494,8 @@ export default function ProtocolEditor({ matchId, user, onBack, bump }: Props) {
               </p>
               {!isLocked ? (
                 <>
-                  {!m.refereeId && <p className="rounded-lg bg-red-50 p-2 text-xs text-red-600">Назначьте главного судью — без него завершение запрещено.</p>}
-                  <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={busy || !m.refereeId} onClick={completeMatch}>
+                  {!m.referee && <p className="rounded-lg bg-red-50 p-2 text-xs text-red-600">Назначьте главного судью — без него завершение запрещено.</p>}
+                  <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={busy || !m.referee} onClick={completeMatch}>
                     Завершить матч
                   </Button>
                 </>

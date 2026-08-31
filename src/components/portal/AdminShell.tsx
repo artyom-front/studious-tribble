@@ -20,6 +20,7 @@ import { KdcPanel, SchedulePanel, RegistrationsPanel, MergePanel, AuditPanel } f
 import { TournamentsPanel, ClubsTeamsPanel } from "./CrudPanels";
 import { PeoplePanel, StadiumsPanel, BannersPanel } from "./CrudPanels2";
 import { MatchesCrudPanel } from "./MatchesCrudPanel";
+import SecurityPanel from "./SecurityPanel";
 import AdminDashboard, { DashboardData } from "./AdminDashboard";
 import { BRAND } from "./brand";
 import { toast } from "sonner";
@@ -27,7 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   LayoutDashboard, Trophy, Shield, Users, MapPin, CalendarPlus, ClipboardPen, Ban, Megaphone,
-  ArrowRightLeft, GitMerge, ScrollText, Bell, Search, LogOut, Home, Menu, CalendarClock, Flag,
+  ArrowRightLeft, GitMerge, ScrollText, Bell, Search, LogOut, Home, Menu, CalendarClock, Flag, KeyRound,
 } from "lucide-react";
 
 interface AdminMatch {
@@ -54,7 +55,7 @@ interface Props {
 
 type Section =
   | "dashboard" | "tournaments" | "teams" | "people" | "stadiums" | "matches" | "banners"
-  | "protocol" | "kdc" | "schedule" | "registrations" | "merge" | "audit";
+  | "protocol" | "kdc" | "schedule" | "registrations" | "merge" | "audit" | "security";
 
 const SECTIONS: { id: Section; label: string; icon: React.ComponentType<{ className?: string }>; group: string; roles: string[] }[] = [
   { id: "dashboard", label: "Дашборд", icon: LayoutDashboard, group: "Обзор", roles: ["REFEREE", "CLUB_ADMIN", "LEAGUE_ADMIN", "SUPER_ADMIN"] },
@@ -69,6 +70,7 @@ const SECTIONS: { id: Section; label: string; icon: React.ComponentType<{ classN
   { id: "registrations", label: "Заявки и трансферы", icon: ArrowRightLeft, group: "Справочники", roles: ["CLUB_ADMIN", "LEAGUE_ADMIN", "SUPER_ADMIN"] },
   { id: "banners", label: "Баннеры сайта", icon: Megaphone, group: "Сайт", roles: ["LEAGUE_ADMIN", "SUPER_ADMIN"] },
   { id: "merge", label: "Merge профилей", icon: GitMerge, group: "Система", roles: ["SUPER_ADMIN"] },
+  { id: "security", label: "Безопасность", icon: KeyRound, group: "Система", roles: ["REFEREE", "CLUB_ADMIN", "LEAGUE_ADMIN", "SUPER_ADMIN"] },
   { id: "audit", label: "Журнал изменений", icon: ScrollText, group: "Система", roles: ["LEAGUE_ADMIN", "SUPER_ADMIN"] },
 ];
 
@@ -167,6 +169,8 @@ export default function AdminShell({ user, version, bump, onReload, focusMatchId
         return <RegistrationsPanel seasonId={effectiveSeasonId} bump={bump} />;
       case "merge":
         return <MergePanel bump={bump} />;
+      case "security":
+        return <SecurityPanel />;
       case "audit":
         return <AuditPanel />;
     }
