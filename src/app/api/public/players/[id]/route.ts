@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { errorResponse, HttpError } from "@/lib/http";
-import { seasonPlayerStats } from "@/lib/engine/stats";
+import { seasonPlayerStats, refereeStats } from "@/lib/engine/stats";
 
 /** Профиль игрока: статистика по сезонам, события, дисквалификации */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -30,6 +30,32 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       take: 50,
     });
 
+    // Судейская карьера (PRD §4: человек может быть игроком И судьёй)
+    let referee: { matches: number; yellowAvg: number; redAvg: number; penaltyAvg: number; avgRating: number | null; ratingsCount: number; matchList: { id: string; kickoff: string; home: string; away: string; status: string; league: string; homeScore: number | null; awayScore: number | null }[] } | null = null;
+    if (person.isReferee) {
+      const refRow = (await refereeStats()).find((r) => r.personId === id) ?? null;
+      const refMatches = await db.match.findMany({
+        where: { refereeId: id },
+        include: { homeTeam: true, awayTeam: true, stage: { include: { season: { include: { league: true } } } } },
+        orderBy: { kickoff: "desc" },
+        take: 30,
+      });
+      referee = {
+        matches: refRow?.matches ?? 0,
+        yellowAvg: refRow?.yellowAvg ?? 0,
+        redAvg: refRow?.redAvg ?? 0,
+        penaltyAvg: refRow?.penaltyAvg ?? 0,
+        avgRating: refRow?.avgRating ?? null,
+        ratingsCount: refRow?.ratingsCount ?? 0,
+        matchList: refMatches.map((m) => ({
+          id: m.id, kickoff: m.kickoff.toISOString(),
+          home: m.homeTeam.name, away: m.awayTeam.name, status: m.status,
+          league: m.stage.season.league.name,
+          homeScore: m.homeScore, awayScore: m.awayScore,
+        })),
+      };
+    }
+
     return Response.json({
       player: {
         id: person.id,
@@ -37,6 +63,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         birthDate: person.birthDate?.toISOString() ?? null,
         position: person.position,
         isReferee: person.isReferee,
+        referee,
         registrations: person.registrations.map((r) => ({
           team: { id: r.team.id, name: r.team.name, clubName: r.team.club?.name ?? null },
           season: { id: r.season.id, name: r.season.name, league: r.season.league.name },

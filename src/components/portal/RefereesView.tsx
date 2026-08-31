@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Star, Flag } from "lucide-react";
 import { useFetch } from "./hooks";
+import { navigate } from "./router";
 import type { RefereeStatDTO } from "./types";
 import { LoadingBlock, ErrorBlock, EmptyState } from "./ui-bits";
 
@@ -23,15 +24,20 @@ export default function RefereesView({ seasonId, version }: { seasonId: string; 
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {data.referees.map((r) => (
-          <Card key={r.personId} className="border-zinc-200">
+          <button
+            key={r.personId}
+            onClick={() => navigate(`/player/${r.personId}`)}
+            className="rounded-xl border border-zinc-200 bg-white text-left transition-all hover:border-emerald-300 hover:shadow-md"
+          >
+          <Card className="border-0 shadow-none">
             <CardContent className="p-5">
               <div className="flex items-center gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-900 text-emerald-400">
                   <Flag className="h-5 w-5" />
                 </span>
                 <div>
-                  <p className="font-semibold leading-tight">{r.name}</p>
-                  <p className="text-xs text-zinc-400">{r.matches} обслуженных матчей</p>
+                  <p className="font-semibold leading-tight group-hover:text-emerald-700">{r.name}</p>
+                  <p className="text-xs text-zinc-400">{r.matches} обслуженных матчей · профиль →</p>
                 </div>
               </div>
 
@@ -66,6 +72,7 @@ export default function RefereesView({ seasonId, version }: { seasonId: string; 
               </div>
             </CardContent>
           </Card>
+          </button>
         ))}
       </div>
 

@@ -69,6 +69,7 @@ model Team {
   clubId  String?
   club    Club?   @relation(fields: [clubId], references: [id])
   logoUrl String?
+  city    String?
   registrations Registration[]
   homeMatches Match[]      @relation("HomeTeam")
   awayMatches Match[]      @relation("AwayTeam")
@@ -77,11 +78,12 @@ model Team {
 }
 
 model Stadium {
-  id      String  @id @default(cuid())
-  name    String
-  city    String?
-  address String?
-  matches Match[]
+  id       String  @id @default(cuid())
+  name     String
+  city     String?
+  address  String?
+  capacity Int?
+  matches  Match[]
 }
 
 // ============================================================
@@ -91,8 +93,14 @@ model Stadium {
 model League {
   id        String  @id @default(cuid())
   name      String
+  /// Короткое имя для сайдбара/виджетов
+  shortName String?
   /// F11 | F8 | F6 | FUTSAL
   format    String
+  /// Закреплена в «Топ-лигах» левого сайдбара (админ)
+  isPinned  Boolean @default(false)
+  /// Порядок в «Топ-лигах» (меньше — выше)
+  priority  Int     @default(0)
   /// Epic 1: дисциплинарные правила
   yellowCardLimit      Int @default(3)
   yellowCardBanMatches Int @default(1)
@@ -194,6 +202,8 @@ model Registration {
   startDate DateTime
   endDate   DateTime?
   number    Int?
+  /// PLAYER | COACH — человек может быть игроком в одной лиге и тренером в другой
+  role      String    @default("PLAYER")
   /// ACTIVE | ENDED
   status    String    @default("ACTIVE")
   createdAt DateTime  @default(now())
@@ -254,6 +264,24 @@ model RefereeRating {
   createdAt    DateTime @default(now())
 
   @@unique([matchId, authorUserId])
+}
+
+/// Рекламные слоты (Milestone 4): управляются вручную через админку
+model Banner {
+  id        String   @id @default(cuid())
+  /// TOP (728x90 под шапкой) | RIGHT_TOP | RIGHT_BOTTOM (300x250)
+  placement String
+  title     String
+  imageUrl  String?
+  linkUrl   String?
+  /// Текст слогана, если нет картинки
+  text      String?
+  isActive  Boolean  @default(true)
+  priority  Int      @default(0)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// Инвариант №4: журнал аудита всех пост-фактум изменений

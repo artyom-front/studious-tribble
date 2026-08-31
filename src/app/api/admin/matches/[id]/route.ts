@@ -193,3 +193,86 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 }
 
 export const dynamic = "force-dynamic";
+
+// ---------- Редактирование матча (дата/время, стадион, судья, тур, статус, команды) ----------
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await requireRole("LEAGUE_ADMIN", "SUPER_ADMIN");
+    const { id } = await ctx.params;
+    const match = await db.match.findUnique({ where: { id }, include: { _count: { select: { events: true, lineups: true } } } });
+    if (!match) throw new HttpError(404, "Матч не найден");
+    if (match.status === "COMPLETED" || match.status === "WALKOVER") {
+      throw new HttpError(409, "Матч завершён — верните его в работу (Reset), прежде чем редактировать");
+    }
+    const body = await req.json();
+    const data: Record<string, unknown> = {};
+
+    if (body.kickoff !== undefined) {
+      const d = new Date(String(body.kickoff));
+      if (Number.isNaN(d.getTime())) throw new HttpError(422, "Некорректная дата начала");
+      data.kickoff = d;
+    }
+    if (body.round !== undefined) data.round = body.round ? Number(body.round) : null;
+    if (body.stadiumId !== undefined) {
+      if (body.stadiumId) {
+        const st = await db.stadium.findUnique({ where: { id: body.stadiumId } });
+        if (!st) throw new HttpError(404, "Стадион не найден");
+      }
+      data.stadiumId = body.stadiumId || null;
+    }
+    if (body.refereeId !== undefined) {
+      if (body.refereeId) {
+        const ref = await db.person.findFirst({ where: { id: body.refereeId, isReferee: true } });
+        if (!ref) throw new HttpError(422, "Указанный судья не найден");
+      }
+      data.refereeId = body.refereeId || null;
+    }
+    if (body.note !== undefined) data.note = body.note || null;
+    if (body.status !== undefined) {
+      if (!["SCHEDULED", "POSTPONED"].includes(body.status)) throw new HttpError(422, "Статус: SCHEDULED или POSTPONED (LIVE/COMPLETED управляются протоколом)");
+      data.status = body.status;
+    }
+    if (body.homeTeamId !== undefined || body.awayTeamId !== undefined) {
+      if (match._count.events > 0 || match._count.lineups > 0) {
+        throw new HttpError(409, "Нельзя менять команды: у матча уже есть события или составы");
+      }
+      const homeId = body.homeTeamId ?? match.homeTeamId;
+      const awayId = body.awayTeamId ?? match.awayTeamId;
+      if (homeId === awayId) throw new HttpError(422, "Команды должны различаться");
+      const [home, away] = await Promise.all([
+        db.team.findUnique({ where: { id: homeId } }),
+        db.team.findUnique({ where: { id: awayId } }),
+      ]);
+      if (!home || !away) throw new HttpError(404, "Одна из команд не найдена");
+      if (body.homeTeamId !== undefined) data.homeTeamId = homeId;
+      if (body.awayTeamId !== undefined) data.awayTeamId = awayId;
+    }
+
+    const updated = await db.match.update({ where: { id }, data });
+    await audit(user, "Match", id, "UPDATE", match, updated);
+    return Response.json({ ok: true, match: updated });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
+// ---------- Удаление матча (только без протокола) ----------
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await requireRole("LEAGUE_ADMIN", "SUPER_ADMIN");
+    const { id } = await ctx.params;
+    const match = await db.match.findUnique({
+      where: { id },
+      include: { _count: { select: { events: true, lineups: true, ratings: true } } },
+    });
+    if (!match) throw new HttpError(404, "Матч не найден");
+    if (match._count.events > 0 || match._count.lineups > 0 || match._count.ratings > 0) {
+      throw new HttpError(409, "Нельзя удалить матч с протоколом: очистите события и составы (или Reset для завершённого)");
+    }
+    await db.match.delete({ where: { id } });
+    await audit(user, "Match", id, "DELETE", match, null);
+    return Response.json({ ok: true });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}

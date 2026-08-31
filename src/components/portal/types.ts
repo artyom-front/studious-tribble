@@ -3,12 +3,30 @@
 export interface LeagueDTO {
   id: string;
   name: string;
+  shortName: string | null;
   format: string;
+  isPinned: boolean;
+  priority: number;
   yellowCardLimit: number;
   redCardBanMatches: number;
   walkoverScore: number;
   transferWindowEnd: string | null;
   seasons: { id: string; name: string; startDate: string; isCurrent: boolean }[];
+}
+
+export interface MatchDayDTO {
+  league: { id: string; name: string; shortName: string | null; format: string; isPinned: boolean; walkoverScore: number };
+  season: { id: string; name: string };
+  matches: MatchDTO[];
+}
+
+export interface BannerDTO {
+  id: string;
+  placement: string;
+  title: string;
+  imageUrl: string | null;
+  linkUrl: string | null;
+  text: string | null;
 }
 
 export interface OverviewDTO {

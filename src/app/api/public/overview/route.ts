@@ -24,7 +24,10 @@ export async function GET() {
       leagues: leagues.map((l) => ({
         id: l.id,
         name: l.name,
+        shortName: l.shortName,
         format: l.format,
+        isPinned: l.isPinned,
+        priority: l.priority,
         yellowCardLimit: l.yellowCardLimit,
         redCardBanMatches: l.redCardBanMatches,
         walkoverScore: l.walkoverScore,
