@@ -1,0 +1,39 @@
+# SCORES21 — дев-стек: PostgreSQL + приложение.
+# Запуск: docker compose up -d --build
+# Локальная разработка (bun run dev): поднимите только базу —
+#   docker compose up -d db
+# БД доступна с хоста на 127.0.0.1:5432 (см. .env.example).
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: scores21-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scores21
+      POSTGRES_PASSWORD: scores21
+      POSTGRES_DB: scores21
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - scores21-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scores21 -d scores21"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    container_name: scores21-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://scores21:scores21@db:5432/scores21?schema=public
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  scores21-pgdata:
