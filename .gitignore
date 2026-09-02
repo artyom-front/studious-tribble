@@ -52,3 +52,7 @@ prompt
 server.log
 # Skills directory
 /skills/
+# agent service files
+/tool-results/
+/upload/
+/scripts/shots/
